@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36429.23 d17.14
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PyroSafe", "PyroSafe\PyroSafe.csproj", "{4B4A2568-3587-4F32-BBF5-831F38F5FEC0}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{4B4A2568-3587-4F32-BBF5-831F38F5FEC0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4B4A2568-3587-4F32-BBF5-831F38F5FEC0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4B4A2568-3587-4F32-BBF5-831F38F5FEC0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4B4A2568-3587-4F32-BBF5-831F38F5FEC0}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {EB7303D8-3861-425D-A936-708BC9B078F5}
+	EndGlobalSection
+EndGlobal
