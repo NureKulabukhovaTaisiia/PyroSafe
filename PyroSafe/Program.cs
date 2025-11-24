@@ -92,6 +92,9 @@ if (app.Environment.IsDevelopment())
 // ===== HTTPS redirection =====
 app.UseHttpsRedirection();
 
+// ===== !!! Routing must go here !!! =====
+app.UseRouting();
+
 // ===== Session =====
 app.UseSession();
 
