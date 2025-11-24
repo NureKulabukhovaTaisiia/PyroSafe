@@ -20,7 +20,7 @@ namespace PyroSafe.Pages.User
             // Беремо нікнейм із сесії
             Username = _httpContextAccessor.HttpContext.Session.GetString("Username");
 
-            // Якщо сесія порожня — редірект на логін
+            // Якщо сесія порожня — редірект на логіня
             if (string.IsNullOrEmpty(Username))
                 return RedirectToPage("/Account/Login");
 

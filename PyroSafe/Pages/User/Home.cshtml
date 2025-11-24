@@ -7,7 +7,7 @@
 <div class="user-menu">
     <span class="username" onclick="toggleDropdown()">@Model.Username ⬇</span>
     <div id="dropdown" class="dropdown-content">
-        <form method="post" action="/Account/Login">
+        <form method="post" asp-page="/Account/Logout">
             <button type="submit" class="logout-btn">Вийти</button>
         </form>
     </div>
