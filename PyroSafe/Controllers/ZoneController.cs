@@ -67,7 +67,7 @@ public class ZoneController : ControllerBase
         _context.Zones.Add(zone);
         await _context.SaveChangesAsync();
 
-        var resultDto = new ZoneReadDto
+        var result = new ZoneReadDto
         {
             ID = zone.ID,
             ZoneName = zone.ZoneName,
@@ -75,7 +75,7 @@ public class ZoneController : ControllerBase
             Area = zone.Area
         };
 
-        return CreatedAtAction(nameof(GetZone), new { id = zone.ID }, resultDto);
+        return CreatedAtAction(nameof(GetZone), new { id = zone.ID }, result);
     }
 
 
@@ -121,6 +121,8 @@ public class ZoneController : ControllerBase
 
         return NoContent();
     }
+
+
 }
 
 // DTO без сенсоров

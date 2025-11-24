@@ -1,0 +1,171 @@
+﻿@page
+@model PyroSafe.Pages.Account.LoginModel
+@inject IHttpContextAccessor HttpContextAccessor
+@{
+    ViewData["Title"] = "Вхід";
+    var username = HttpContextAccessor.HttpContext.Session.GetString("Username");
+    if (!string.IsNullOrEmpty(username))
+    {
+        Response.Redirect("/User/Home");
+    }
+}
+
+<div class="form-wrapper">
+    <h1 class="welcome-title">Вітаємо в PyroSafe</h1>
+
+    <div class="form-container">
+        <h2>Вхід</h2>
+
+        <form id="loginForm">
+            <label>Email:</label>
+            <input type="email" id="email" required />
+
+            <label>Пароль:</label>
+            <input type="password" id="password" required />
+
+            <button type="submit" class="btn-submit">Увійти</button>
+        </form>
+
+        <button class="btn-login" onclick="location.href='/Account/Register'">Немає акаунту? Зареєструватися</button>
+
+        <p id="result"></p>
+    </div>
+</div>
+<script>
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const data = {
+            email: document.getElementById('email').value,
+            password: document.getElementById('password').value
+        };
+
+        const response = await fetch('/api/users/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+
+        if (response.ok) {
+            // Користувач успішно залогінений, редірект на домашню сторінку
+            window.location.href = '/User/Home';
+        } else {
+            const err = await response.text();
+            document.getElementById('result').innerText = err;
+            document.getElementById('result').style.color = '#ff5555';
+        }
+    });
+</script>
+
+
+<style>
+    body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #0a0a0a, #0a1a2e);
+        color: #fff;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        margin: 0;
+    }
+
+    .form-wrapper {
+        text-align: center;
+    }
+
+    .welcome-title {
+        font-size: 36px;
+        margin-bottom: 20px;
+        color: #00bfff;
+        font-weight: 700;
+        text-shadow: 0 0 10px #00bfff;
+    }
+
+    .form-container {
+        background-color: #0d0d0d;
+        padding: 40px;
+        border-radius: 12px;
+        box-shadow: 0 0 20px rgba(0, 191, 255, 0.5);
+        width: 400px;
+        max-width: 90%;
+        margin: 0 auto;
+    }
+
+    h2 {
+        margin-bottom: 25px;
+        color: #00bfff;
+        font-weight: 700;
+        letter-spacing: 1px;
+    }
+
+    label {
+        display: block;
+        margin-top: 15px;
+        margin-bottom: 5px;
+        font-weight: 600;
+        color: #00bfff;
+    }
+
+    input[type="email"],
+    input[type="password"] {
+        width: 100%;
+        padding: 12px;
+        margin-bottom: 10px;
+        border: 1px solid #00bfff;
+        border-radius: 6px;
+        background-color: #0a0a0a;
+        color: #fff;
+        font-size: 14px;
+        transition: border 0.3s;
+    }
+
+        input[type="email"]:focus,
+        input[type="password"]:focus {
+            border: 2px solid #00bfff;
+            outline: none;
+        }
+
+    .btn-submit {
+        width: 100%;
+        padding: 12px;
+        margin-top: 15px;
+        background-color: #00bfff;
+        color: #0a0a0a;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 16px;
+        font-weight: 600;
+        transition: background-color 0.3s, transform 0.2s;
+    }
+
+        .btn-submit:hover {
+            background-color: #0099cc;
+            transform: scale(1.02);
+        }
+
+    .btn-login {
+        width: 100%;
+        padding: 10px;
+        margin-top: 10px;
+        background-color: #0a0a0a;
+        color: #00bfff;
+        border: 2px solid #00bfff;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+        transition: background-color 0.3s, color 0.3s;
+    }
+
+        .btn-login:hover {
+            background-color: #00bfff;
+            color: #0a0a0a;
+        }
+
+    #result {
+        margin-top: 15px;
+        font-weight: bold;
+        text-align: center;
+    }
+</style>

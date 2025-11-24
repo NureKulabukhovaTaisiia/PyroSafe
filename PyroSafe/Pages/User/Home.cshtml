@@ -1,0 +1,167 @@
+﻿@page
+@model PyroSafe.Pages.User.HomeModel
+@{
+    ViewData["Title"] = "Панель охоронця";
+}
+
+<div class="user-menu">
+    <span class="username" onclick="toggleDropdown()">@Model.Username ⬇</span>
+    <div id="dropdown" class="dropdown-content">
+        <form method="post" action="/Account/Login">
+            <button type="submit" class="logout-btn">Вийти</button>
+        </form>
+    </div>
+</div>
+
+<div class="dashboard-wrapper">
+    <h1 class="dashboard-title">Панель охоронця PyroSafe</h1>
+
+    <div class="actions">
+        <button onclick="alert('Створити звіт')" class="btn-action">Створити звіт</button>
+        <button onclick="alert('Екстренне сповіщення')" class="btn-action">Екстренне сповіщення</button>
+        <button class="btn-action" onclick="location.href='/User/AddZoneSensor'">
+            Додати Сенсор та зону
+        </button>
+        <button onclick="alert('Створити сценарій/івент')" class="btn-action">Створити сценарій/івент</button>
+    </div>
+
+    <div id="zonesContainer"></div>
+</div>
+
+<script>
+    async function loadZones() {
+        const zonesResponse = await fetch('/api/zones');
+        const zones = await zonesResponse.json();
+
+        const sensorsResponse = await fetch('/api/sensors');
+        const sensors = await sensorsResponse.json();
+
+        const container = document.getElementById('zonesContainer');
+        container.innerHTML = '';
+
+        zones.forEach(zone => {
+            const zoneDiv = document.createElement('div');
+            zoneDiv.classList.add('zone');
+
+            zoneDiv.innerHTML = `
+                <h2>Зона: ${zone.ZoneName} (Поверх: ${zone.Floor}, Площа: ${zone.Area} м²)</h2>
+                <ul>
+                    ${sensors.filter(s => s.ZoneID === zone.ID)
+                              .map(s => `<li>${s.SensorName} - Статус: ${s.Status}</li>`).join('')}
+                </ul>
+            `;
+
+            container.appendChild(zoneDiv);
+        });
+    }
+
+    window.addEventListener('DOMContentLoaded', loadZones);
+
+    function toggleDropdown() {
+        const dropdown = document.getElementById('dropdown');
+        dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
+    }
+</script>
+
+<style>
+    body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #0a0a0a, #0a1a2e);
+        color: #fff;
+        margin: 0;
+        padding: 20px;
+    }
+
+    .user-menu {
+        position: absolute;
+        top: 20px;
+        right: 30px;
+        font-size: 20px;
+        font-weight: 600;
+        color: #00bfff;
+        cursor: pointer;
+        text-shadow: 0 0 8px #00bfff;
+    }
+
+    .dropdown-content {
+        display: none;
+        position: absolute;
+        right: 0;
+        background-color: #0d0d0d;
+        min-width: 120px;
+        border: 1px solid #00bfff;
+        border-radius: 6px;
+        margin-top: 5px;
+        text-align: center;
+        z-index: 100;
+    }
+
+    .logout-btn {
+        background: none;
+        border: none;
+        color: #00bfff;
+        font-weight: 600;
+        cursor: pointer;
+        padding: 5px 10px;
+    }
+
+    .dashboard-wrapper {
+        max-width: 1200px;
+        margin: 0 auto;
+        text-align: center;
+    }
+
+    .dashboard-title {
+        font-size: 36px;
+        color: #00bfff;
+        margin-bottom: 30px;
+        text-shadow: 0 0 10px #00bfff;
+    }
+
+    .actions {
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 15px;
+        margin-bottom: 40px;
+    }
+
+    .btn-action {
+        padding: 15px 25px;
+        background-color: #00bfff;
+        color: #0a0a0a;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 600;
+        transition: background-color 0.3s, transform 0.2s;
+    }
+
+        .btn-action:hover {
+            background-color: #0099cc;
+            transform: scale(1.05);
+        }
+
+    .zone {
+        background-color: #0d0d0d;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 25px;
+        box-shadow: 0 0 15px rgba(0, 191, 255, 0.5);
+        text-align: left;
+    }
+
+        .zone h2 {
+            color: #00bfff;
+        }
+
+        .zone ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .zone li {
+            padding: 5px 0;
+            border-bottom: 1px solid #00bfff33;
+        }
+</style>

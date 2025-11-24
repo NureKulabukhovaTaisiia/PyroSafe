@@ -61,7 +61,6 @@ public class UsersController : ControllerBase
         return Ok(users);
     }
 
-    // Получить одного пользователя по ID
     [HttpGet("{id}")]
     public async Task<ActionResult<UserDto>> GetUserById(int id)
     {
@@ -98,7 +97,7 @@ public class UsersController : ControllerBase
         user.UserRole = dto.UserRole;
 
         if (!string.IsNullOrEmpty(dto.Password))
-            user.Password = dto.Password; // ⚠ Хэшировать в продакшене
+            user.Password = dto.Password; 
 
         await _context.SaveChangesAsync();
         return NoContent();
@@ -116,9 +115,37 @@ public class UsersController : ControllerBase
         await _context.SaveChangesAsync();
         return NoContent();
     }
+
+    // POST: api/users/login
+    [HttpPost("login")]
+    public async Task<IActionResult> Login([FromBody] LoginDto dto)
+    {
+        var user = await _context.Users
+            .FirstOrDefaultAsync(u => u.Email == dto.Email && u.Password == dto.Password);
+
+        if (user == null)
+            return BadRequest("Неправильний email або пароль");
+
+        // ===== Збереження в сесії =====
+        HttpContext.Session.SetInt32("UserID", user.ID);
+        HttpContext.Session.SetString("Username", user.Username);
+        HttpContext.Session.SetString("Email", user.Email);
+        HttpContext.Session.SetString("UserRole", user.UserRole.ToString());
+
+        return Ok(new { user.ID, user.Username, user.Email, user.UserRole });
+    }
+
+
+
 }
 
 // -------------------- DTO --------------------
+
+public class LoginDto
+{
+    public string Email { get; set; }
+    public string Password { get; set; }
+}
 public class UserCreateDto
 {
     public string Username { get; set; }

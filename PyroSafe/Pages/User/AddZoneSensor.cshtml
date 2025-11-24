@@ -1,0 +1,230 @@
+﻿@page
+@model PyroSafe.Pages.User.AddZoneSensorModel
+@{
+    ViewData["Title"] = "Додати Зону та Сенсори";
+}
+
+<div class="form-wrapper">
+    <h1 class="welcome-title">Додати Зону та Сенсори</h1>
+
+    <div class="form-container">
+        <!-- -------------------------------------- -->
+        <!--             СТВОРЕННЯ ЗОНИ             -->
+        <!-- -------------------------------------- -->
+
+        <h2>Нова зона</h2>
+        <form id="zoneForm">
+            <label>Назва зони:</label>
+            <input type="text" id="zoneName" required />
+
+            <label>Поверх:</label>
+            <input type="number" id="floor" required />
+
+            <label>Площа (м²):</label>
+            <input type="number" step="0.1" id="area" required />
+
+            <button type="submit" class="btn-submit">Створити Зону</button>
+        </form>
+
+        <p id="zoneResult"></p>
+
+        <hr style="margin:20px 0; border-color:#00bfff" />
+
+        <!-- -------------------------------------- -->
+        <!--           ДОДАВАННЯ СЕНСОРІВ          -->
+        <!-- -------------------------------------- -->
+
+        <h2>Додати сенсор у зону</h2>
+
+        <label>Оберіть зону:</label>
+        <select id="zoneSelect"></select>
+
+        <div class="sensor-entry">
+            <label>Назва сенсора:</label>
+            <input type="text" id="sensorName" />
+
+            <label>Тип сенсора:</label>
+            <select id="sensorType">
+                <option value="Gas">Газ</option>
+                <option value="Temperature">Температура</option>
+                <option value="Smoke">Дим</option>
+            </select>
+
+            <label>Значення:</label>
+            <input type="text" id="sensorValue" />
+
+            <label>Статус:</label>
+            <select id="sensorStatus">
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
+            </select>
+
+            <p id="sensorResult"></p>
+            <button type="button" id="createSensorBtn" class="btn-login">Створити сенсор</button>
+
+        </div>
+</div>
+
+
+<script>
+    // -------------------------------------------
+    // 1. Завантаження існуючих зон для випадаючого списку
+    // -------------------------------------------
+    async function loadZones() {
+        const res = await fetch('/api/zone');
+        const zones = await res.json();
+
+        const select = document.getElementById('zoneSelect');
+        select.innerHTML = "";
+
+        zones.forEach(z => {
+            let opt = document.createElement('option');
+            opt.value = z.id || z.ID;
+            opt.textContent = `${z.zoneName || z.ZoneName} (поверх ${z.floor})`;
+            select.appendChild(opt);
+        });
+    }
+
+    loadZones();
+
+
+    // -------------------------------------------
+    // 2. Створення зони
+    // -------------------------------------------
+    document.getElementById('zoneForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const zoneData = {
+            ZoneName: document.getElementById('zoneName').value,
+            Floor: parseInt(document.getElementById('floor').value),
+            Area: parseFloat(document.getElementById('area').value)
+        };
+
+        const response = await fetch('/api/zone', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(zoneData)
+        });
+
+        if (!response.ok) {
+            document.getElementById('zoneResult').innerText = "Помилка створення зони.";
+            return;
+        }
+
+        const zone = await response.json();
+        document.getElementById('zoneResult').innerText =  `Зона "${zone.zoneName}" успішно створена!`;
+
+        await loadZones(); // оновити список зон
+    });
+
+
+    // -------------------------------------------
+    // 3. Створення сенсора з вибором зони
+    // -------------------------------------------
+        document.getElementById('createSensorBtn').addEventListener('click', async () => {
+
+            const sensorData = {
+                SensorName: document.getElementById('sensorName').value,
+                SensorValue: document.getElementById('sensorValue').value,
+                SensorType: document.getElementById('sensorType').value,
+                Status: document.getElementById('sensorStatus').value,
+                ZoneID: parseInt(document.getElementById('zoneSelect').value)
+            };
+
+            if (!sensorData.SensorName || !sensorData.SensorType || !sensorData.SensorValue) {
+                document.getElementById('sensorResult').innerText = "Заповніть всі поля!";
+                return;
+            }
+
+            const res = await fetch('/api/sensors', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(sensorData)
+            });
+
+            if (!res.ok) {
+                const err = await res.json();
+                document.getElementById('sensorResult').innerText = "Помилка створення сенсора: " + (err.message || res.statusText);
+                return;
+            }
+
+            document.getElementById('sensorResult').innerText = "Сенсор успішно додано!";
+        });
+
+</script>
+
+
+<style>
+    body {
+        font-family: 'Segoe UI', sans-serif;
+        background: linear-gradient(135deg,#0a0a0a,#0a1a2e);
+        color: #fff;
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        padding-top: 30px;
+    }
+
+    .form-wrapper {
+        text-align: center;
+        width: 500px;
+    }
+
+    .form-container {
+        background-color: #0d0d0d;
+        padding: 30px;
+        border-radius: 12px;
+        box-shadow: 0 0 20px rgba(0,191,255,0.5);
+    }
+
+    h2 {
+        color: #00bfff;
+        margin-top: 20px;
+    }
+
+    label {
+        display: block;
+        margin-top: 10px;
+        color: #00bfff;
+    }
+
+    input, select {
+        width: 100%;
+        padding: 8px;
+        margin-bottom: 10px;
+        border-radius: 6px;
+        border: 1px solid #00bfff;
+        background: #0a0a0a;
+        color: #fff;
+    }
+
+    .btn-submit, .btn-login {
+        padding: 10px;
+        width: 100%;
+        margin-top: 10px;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 600;
+        background: #00bfff;
+        color: #0a0a0a;
+    }
+
+    .btn-login {
+        background: #0a0a0a;
+        border: 2px solid #00bfff;
+        color: #00bfff;
+    }
+
+        .btn-login:hover {
+            background: #00bfff;
+            color: #0a0a0a;
+        }
+
+    .sensor-entry {
+        border: 1px solid #00bfff;
+        padding: 10px;
+        margin-bottom: 10px;
+        border-radius: 6px;
+    }
+</style>

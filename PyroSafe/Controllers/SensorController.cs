@@ -64,21 +64,36 @@ public class SensorController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<SensorReadDto>> CreateSensor([FromBody] SensorCreateDto sensorDto)
     {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
         var zone = await _context.Zones.FindAsync(sensorDto.ZoneID);
         if (zone == null)
             return BadRequest(new { message = "Zone not found" });
 
+        // Перевірка SensorValue і Status, якщо потрібно
+        string status = string.IsNullOrEmpty(sensorDto.Status) ? "OK" : sensorDto.Status;
+        string value = string.IsNullOrEmpty(sensorDto.SensorValue) ? "0" : sensorDto.SensorValue;
+
         var sensor = new Sensor
         {
             SensorName = sensorDto.SensorName,
-            SensorValue = sensorDto.SensorValue,
+            SensorValue = value,
             SensorType = sensorDto.SensorType,
             ZoneID = sensorDto.ZoneID,
-            Status = sensorDto.Status
+            Status = status
         };
 
         _context.Sensors.Add(sensor);
-        await _context.SaveChangesAsync();
+
+        try
+        {
+            await _context.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
 
         var resultDto = new SensorReadDto
         {
