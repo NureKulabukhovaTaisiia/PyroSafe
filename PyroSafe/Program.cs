@@ -8,12 +8,6 @@ using System.Diagnostics;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ===== BASE DOMAIN (локально и в проде) =====
-var baseDomain = builder.Configuration["BASE_DOMAIN"]
-                 ?? "http://localhost:7080";
-// На Render это может быть: https://pyrosafe.onrender.com
-
-
 // ===== PostgreSQL =====
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("PostgreSqlConnection")));
@@ -29,17 +23,18 @@ builder.Services.AddCors(options =>
     });
 });
 
-
-// ===== Controllers & Razor Pages =====
+// ===== Razor + Controllers =====
 builder.Services.AddControllers();
 builder.Services.AddRazorPages();
 
-// ===== Session =====
+// ===== Session FIXED VERSION =====
 builder.Services.AddDistributedMemoryCache();
 builder.Services.AddSession(options =>
 {
-    options.IdleTimeout = TimeSpan.FromHours(1);
+    options.Cookie.Name = ".PyroSafe.Session";     // Унікальне імʼя cookie
+    options.IdleTimeout = TimeSpan.FromHours(2);   // Час життя сесії
     options.Cookie.HttpOnly = true;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always; // Render вимагає
     options.Cookie.IsEssential = true;
 });
 
@@ -53,12 +48,11 @@ builder.Services.AddSwaggerGen(c =>
     c.SwaggerDoc("v1", new OpenApiInfo
     {
         Title = "PyroSafe API",
-        Version = "v1",
-        Description = "API для системи управління пожежною безпекою"
+        Version = "v1"
     });
 });
 
-// ===== Forwarded Headers (обовʼязково для Render!) =====
+// ===== Forwarded headers (обов'язково для Render) =====
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders =
@@ -68,7 +62,6 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.KnownNetworks.Clear();
     options.KnownProxies.Clear();
 });
-
 
 var app = builder.Build();
 
@@ -85,29 +78,31 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI(c =>
     {
         c.SwaggerEndpoint("/swagger/v1/swagger.json", "PyroSafe API v1");
-        c.RoutePrefix = "swagger";
     });
 }
 
-// ===== HTTPS redirection =====
 app.UseHttpsRedirection();
 
-// ===== !!! Routing must go here !!! =====
+// ===== STATIC FILES (важливо для cookie!) =====
+app.UseStaticFiles();
+
+// ===== Routing =====
 app.UseRouting();
 
-// ===== Session =====
+// ===== SESSION (має бути ТУТ перед auth/pages) =====
 app.UseSession();
 
+// ===== Authorization =====
 app.UseAuthorization();
 
-// ===== Controllers & Pages =====
-app.MapControllers();
+// ===== Razor / Controllers =====
 app.MapRazorPages();
+app.MapControllers();
 
-// ===== Auto-open browser (ONLY LOCAL) =====
+// ===== Auto-open browser (local only) =====
 if (app.Environment.IsDevelopment())
 {
-    var url = "https://pyrosafe-o880.onrender.com/Account/Register";
+    var url = "http://localhost:7080/Account/Register";
     try
     {
         Process.Start(new ProcessStartInfo
@@ -116,10 +111,7 @@ if (app.Environment.IsDevelopment())
             UseShellExecute = true
         });
     }
-    catch
-    {
-        Console.WriteLine("Не вдалося автоматично відкрити браузер.");
-    }
+    catch { }
 }
 
 app.Run();

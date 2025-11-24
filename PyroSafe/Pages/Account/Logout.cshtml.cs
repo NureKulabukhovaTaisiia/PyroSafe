@@ -7,9 +7,18 @@ namespace PyroSafe.Pages.Account
     {
         public IActionResult OnPost()
         {
-            HttpContext.Session.Clear(); // чистим сессию
-            Response.Cookies.Delete(".AspNetCore.Session"); // удаляем cookie сессии
-            return RedirectToPage("/Account/Register"); // редирект на регистрацию
+            // Очистити серверну частину сесії
+            HttpContext.Session.Clear();
+
+            // Видалити cookie сесії
+            Response.Cookies.Delete(".PyroSafe.Session");
+
+            // Додатково блокуємо кеш браузера, щоб не повертало назад
+            Response.Headers["Cache-Control"] = "no-store, no-cache, must-revalidate";
+            Response.Headers["Pragma"] = "no-cache";
+            Response.Headers["Expires"] = "0";
+
+            return RedirectToPage("/Account/Login");
         }
     }
 }
