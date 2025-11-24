@@ -5,13 +5,14 @@ namespace PyroSafe.Pages.Account
 {
     public class LogoutModel : PageModel
     {
+        [ValidateAntiForgeryToken] // захищає від CSRF
         public IActionResult OnPost()
         {
             // Очистити сесію
             HttpContext.Session.Clear();
 
-            // Перенаправлення на сторінку входу
-            return RedirectToPage("/Account/Login");
+            // Переадресувати на сторінку реєстрації або логіну
+            return RedirectToPage("/Account/Register");
         }
     }
 }
