@@ -1,12 +1,7 @@
 ﻿@page
 @model PyroSafe.Pages.Account.LogoutModel
-@{
-    Layout = null; 
-}
 
-<h2>Вихід...</h2>
-
-<form method="post" asp-page="/Account/Logout">
+<form method="post">
     @Html.AntiForgeryToken()
     <button type="submit">Вийти</button>
 </form>

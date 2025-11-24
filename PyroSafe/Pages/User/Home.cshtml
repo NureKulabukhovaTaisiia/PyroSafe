@@ -2,6 +2,7 @@
 @model PyroSafe.Pages.User.HomeModel
 @{
     ViewData["Title"] = "Панель охоронця";
+
 }
 <div class="user-menu">
     <span class="username" onclick="toggleDropdown()">@Model.Username ⬇</span>
@@ -10,6 +11,7 @@
             @Html.AntiForgeryToken()
             <button type="submit">Вийти</button>
         </form>
+
     </div>
 </div>
 

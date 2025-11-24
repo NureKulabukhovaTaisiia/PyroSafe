@@ -5,12 +5,11 @@ namespace PyroSafe.Pages.Account
 {
     public class LogoutModel : PageModel
     {
-        [ValidateAntiForgeryToken]
         public IActionResult OnPost()
         {
-            HttpContext.Session.Clear();
-            return RedirectToPage("/Account/Register");
+            HttpContext.Session.Clear(); // чистим сессию
+            Response.Cookies.Delete(".AspNetCore.Session"); // удаляем cookie сессии
+            return RedirectToPage("/Account/Register"); // редирект на регистрацию
         }
-
     }
 }

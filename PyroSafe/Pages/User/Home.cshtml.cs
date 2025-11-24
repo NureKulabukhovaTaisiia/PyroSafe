@@ -17,14 +17,13 @@ namespace PyroSafe.Pages.User
 
         public IActionResult OnGet()
         {
-            // Беремо ім’я користувача з сесії
             Username = _httpContextAccessor.HttpContext.Session.GetString("Username");
 
-            // Якщо сесія порожня — редірект на логін
             if (string.IsNullOrEmpty(Username))
-                return RedirectToPage("/Account/Login");
+                return RedirectToPage("/Account/Register"); // <-- редирект на регистрацию после выхода
 
             return Page();
         }
+
     }
 }
