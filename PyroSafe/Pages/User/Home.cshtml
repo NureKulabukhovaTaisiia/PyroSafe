@@ -6,7 +6,8 @@
 <div class="user-menu">
     <span class="username" onclick="toggleDropdown()">@Model.Username ⬇</span>
     <div id="dropdown" class="dropdown-content">
-        <form method="post" action="/Account/Logout">
+        <form method="post" asp-page="/Account/Logout">
+            @Html.AntiForgeryToken()
             <button type="submit">Вийти</button>
         </form>
     </div>
@@ -29,9 +30,12 @@
 </div>
 
 <script>
-        async function logout() {
-        await fetch('/Account/Logout', { method: 'POST' });
-        window.location.href = '/Account/Login';
+    function logout() {
+        fetch('/Account/Logout', { method: 'POST' })
+            .then(() => {
+                window.location.href = '/Account/Register'; // або /Account/Login
+            })
+            .catch(err => console.error(err));
     }
     async function loadZones() {
         const zonesResponse = await fetch('/api/zones');
