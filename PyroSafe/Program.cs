@@ -104,7 +104,7 @@ app.MapRazorPages();
 // ===== Auto-open browser (ONLY LOCAL) =====
 if (app.Environment.IsDevelopment())
 {
-    var url = "https://localhost:7080/Account/Register";
+    var url = "https://pyrosafe-o880.onrender.com/Account/Register";
     try
     {
         Process.Start(new ProcessStartInfo

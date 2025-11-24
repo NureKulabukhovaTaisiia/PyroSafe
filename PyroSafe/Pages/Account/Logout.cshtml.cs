@@ -7,13 +7,11 @@ namespace PyroSafe.Pages.Account
     {
         public IActionResult OnPost()
         {
-            // Очистка сесії
+            // очистити сесію
             HttpContext.Session.Clear();
 
-            // Або, якщо використовуєш cookie-аутентифікацію:
-            // await HttpContext.SignOutAsync();
-
-            return RedirectToPage("/Account/Login"); // Повернення на сторінку логіну
+            // редірект назад на логін
+            return RedirectToPage("/Account/Login");
         }
     }
 }
