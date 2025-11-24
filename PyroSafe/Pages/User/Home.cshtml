@@ -3,16 +3,15 @@
 @{
     ViewData["Title"] = "Панель охоронця";
 }
-
 <div class="user-menu">
     <span class="username" onclick="toggleDropdown()">@Model.Username ⬇</span>
     <div id="dropdown" class="dropdown-content">
-        <form method="post" asp-page="/Account/Logout">
-            <button onclick="logout()">Вийти</button>
+        <form method="post" action="/Account/Logout">
+            <button type="submit">Вийти</button>
         </form>
-
     </div>
 </div>
+
 
 <div class="dashboard-wrapper">
     <h1 class="dashboard-title">Панель охоронця PyroSafe</h1>
