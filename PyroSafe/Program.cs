@@ -8,6 +8,10 @@ using System.Diagnostics;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// ===== BASE DOMAIN =====
+var baseDomain = builder.Configuration["BASE_DOMAIN"]
+                 ?? "http://localhost:7080";
+
 // ===== PostgreSQL =====
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("PostgreSqlConnection")));
@@ -23,22 +27,23 @@ builder.Services.AddCors(options =>
     });
 });
 
-// ===== Razor + Controllers =====
+// ===== Controllers & Razor Pages =====
 builder.Services.AddControllers();
 builder.Services.AddRazorPages();
 
-// ===== Session FIXED VERSION =====
+// ===== Session =====
 builder.Services.AddDistributedMemoryCache();
 builder.Services.AddSession(options =>
 {
-    options.Cookie.Name = ".PyroSafe.Session";     // Унікальне імʼя cookie
-    options.IdleTimeout = TimeSpan.FromHours(2);   // Час життя сесії
+    options.IdleTimeout = TimeSpan.FromHours(1);
     options.Cookie.HttpOnly = true;
-    options.Cookie.SecurePolicy = CookieSecurePolicy.Always; // Render вимагає
     options.Cookie.IsEssential = true;
+
+    // важливо для Render
+    options.Cookie.SameSite = SameSiteMode.Lax;
 });
 
-// ===== IHttpContextAccessor =====
+// ===== HttpContextAccessor =====
 builder.Services.AddHttpContextAccessor();
 
 // ===== Swagger =====
@@ -52,7 +57,7 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-// ===== Forwarded headers (обов'язково для Render) =====
+// ===== Forwarded Headers (Render) =====
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders =
@@ -65,49 +70,46 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 
 var app = builder.Build();
 
-// ===== Enable forwarded headers =====
+// ===== Forwarded headers =====
 app.UseForwardedHeaders();
 
-// ===== CORS =====
-app.UseCors("AllowApp");
-
-// ===== Swagger =====
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI(c =>
-    {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "PyroSafe API v1");
-    });
-}
-
+// ===== HTTPS redirect =====
 app.UseHttpsRedirection();
 
-// ===== STATIC FILES (важливо для cookie!) =====
+// ===== Static files (необхідно!) =====
 app.UseStaticFiles();
 
 // ===== Routing =====
 app.UseRouting();
 
-// ===== SESSION (має бути ТУТ перед auth/pages) =====
+// ===== CORS =====
+app.UseCors("AllowApp");
+
+// ===== Session =====
 app.UseSession();
 
 // ===== Authorization =====
 app.UseAuthorization();
 
-// ===== Razor / Controllers =====
-app.MapRazorPages();
+// ===== Controllers & Pages =====
 app.MapControllers();
+app.MapRazorPages();
 
-// ===== Auto-open browser (local only) =====
+// ===== Swagger =====
 if (app.Environment.IsDevelopment())
 {
-    var url = "http://localhost:7080/Account/Register";
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+// ===== Auto-open browser (LOCAL ONLY) =====
+if (app.Environment.IsDevelopment())
+{
     try
     {
         Process.Start(new ProcessStartInfo
         {
-            FileName = url,
+            FileName = "https://pyrosafe-o880.onrender.com/Account/Register",
             UseShellExecute = true
         });
     }
