@@ -8,7 +8,7 @@ namespace PyroSafe.Pages.Account
         public IActionResult OnPost()
         {
             HttpContext.Session.Clear();
-            return RedirectToPage("/Account/Login");
+            return Redirect("/Account/Login");
         }
     }
 }
