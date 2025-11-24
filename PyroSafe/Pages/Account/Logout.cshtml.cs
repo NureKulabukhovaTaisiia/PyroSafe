@@ -7,18 +7,23 @@ namespace PyroSafe.Pages.Account
     {
         public IActionResult OnPost()
         {
-            // Очистити серверну частину сесії
+            // 1) Очистити дані
             HttpContext.Session.Clear();
 
-            // Видалити cookie сесії
-            Response.Cookies.Delete(".PyroSafe.Session");
+            // 2) Видалити session cookie
+            Response.Cookies.Delete(".AspNetCore.Session");
 
-            // Додатково блокуємо кеш браузера, щоб не повертало назад
+            // 3) Видалити custom cookie (раптом у тебе є)
+            Response.Cookies.Delete("Username");
+            Response.Cookies.Delete("UserId");
+
+            // 4) Заборонити кеш, щоб браузер не повертав назад
             Response.Headers["Cache-Control"] = "no-store, no-cache, must-revalidate";
             Response.Headers["Pragma"] = "no-cache";
-            Response.Headers["Expires"] = "0";
+            Response.Headers["Expires"] = "-1";
 
-            return RedirectToPage("/Account/Login");
+            // 5) Редірект на login
+            return Redirect("/Account/Login");
         }
     }
 }
