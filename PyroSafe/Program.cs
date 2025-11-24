@@ -1,20 +1,27 @@
-using Microsoft.AspNetCore.Builder;
+п»їusing Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.OpenApi.Models;
+using Microsoft.AspNetCore.HttpOverrides;
 using System.Diagnostics;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ===== Підключення до PostgreSQL =====
+// ===== BASE DOMAIN (Р»РѕРєР°Р»СЊРЅРѕ Рё РІ РїСЂРѕРґРµ) =====
+var baseDomain = builder.Configuration["BASE_DOMAIN"]
+                 ?? "http://localhost:7080";
+// РќР° Render СЌС‚Рѕ РјРѕР¶РµС‚ Р±С‹С‚СЊ: https://pyrosafe.onrender.com
+
+
+// ===== PostgreSQL =====
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("PostgreSqlConnection")));
 
 // ===== CORS =====
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll", policy =>
+    options.AddPolicy("AllowApp", policy =>
     {
         policy.AllowAnyOrigin()
               .AllowAnyHeader()
@@ -22,19 +29,19 @@ builder.Services.AddCors(options =>
     });
 });
 
-// ===== Контролери та Razor Pages =====
+
+// ===== Controllers & Razor Pages =====
 builder.Services.AddControllers();
 builder.Services.AddRazorPages();
 
-// ===== Сесія =====
-builder.Services.AddDistributedMemoryCache(); // Пам'ять для сесій
+// ===== Session =====
+builder.Services.AddDistributedMemoryCache();
 builder.Services.AddSession(options =>
 {
-    options.IdleTimeout = TimeSpan.FromHours(1); // Час життя сесії
+    options.IdleTimeout = TimeSpan.FromHours(1);
     options.Cookie.HttpOnly = true;
     options.Cookie.IsEssential = true;
 });
-
 
 // ===== IHttpContextAccessor =====
 builder.Services.AddHttpContextAccessor();
@@ -47,14 +54,29 @@ builder.Services.AddSwaggerGen(c =>
     {
         Title = "PyroSafe API",
         Version = "v1",
-        Description = "API для системи управління пожежною безпекою"
+        Description = "API РґР»СЏ СЃРёСЃС‚РµРјРё СѓРїСЂР°РІР»С–РЅРЅСЏ РїРѕР¶РµР¶РЅРѕСЋ Р±РµР·РїРµРєРѕСЋ"
     });
 });
 
+// ===== Forwarded Headers (РѕР±РѕРІКјСЏР·РєРѕРІРѕ РґР»СЏ Render!) =====
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders =
+        ForwardedHeaders.XForwardedFor |
+        ForwardedHeaders.XForwardedProto;
+
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
+
 var app = builder.Build();
 
+// ===== Enable forwarded headers =====
+app.UseForwardedHeaders();
+
 // ===== CORS =====
-app.UseCors("AllowAll");
+app.UseCors("AllowApp");
 
 // ===== Swagger =====
 if (app.Environment.IsDevelopment())
@@ -63,35 +85,38 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI(c =>
     {
         c.SwaggerEndpoint("/swagger/v1/swagger.json", "PyroSafe API v1");
-        c.RoutePrefix = "swagger"; // Swagger буде на /swagger
+        c.RoutePrefix = "swagger";
     });
 }
 
-// ===== HTTPS =====
+// ===== HTTPS redirection =====
 app.UseHttpsRedirection();
 
-// ===== Сесія =====
+// ===== Session =====
 app.UseSession();
 
 app.UseAuthorization();
 
-// ===== Контролери та Razor Pages =====
+// ===== Controllers & Pages =====
 app.MapControllers();
 app.MapRazorPages();
 
-// ===== Автооткриття браузера з реєстрацією =====
-var url = "https://localhost:7080/Account/Register"; // стартова сторінка реєстрації
-try
+// ===== Auto-open browser (ONLY LOCAL) =====
+if (app.Environment.IsDevelopment())
 {
-    Process.Start(new ProcessStartInfo
+    var url = "https://localhost:7080/Account/Register";
+    try
     {
-        FileName = url,
-        UseShellExecute = true
-    });
-}
-catch
-{
-    Console.WriteLine("Не вдалося автоматично відкрити браузер.");
+        Process.Start(new ProcessStartInfo
+        {
+            FileName = url,
+            UseShellExecute = true
+        });
+    }
+    catch
+    {
+        Console.WriteLine("РќРµ РІРґР°Р»РѕСЃСЏ Р°РІС‚РѕРјР°С‚РёС‡РЅРѕ РІС–РґРєСЂРёС‚Рё Р±СЂР°СѓР·РµСЂ.");
+    }
 }
 
 app.Run();
