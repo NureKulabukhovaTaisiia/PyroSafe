@@ -1,11 +1,11 @@
 ﻿@page
 @model PyroSafe.Pages.User.AddZoneSensorModel
 @{
-    ViewData["Title"] = "Додати Зону та Сенсори";
+    ViewData["Title"] = "Додати / Видалити Зони та Сенсори";
 }
 
 <div class="form-wrapper">
-    <h1 class="welcome-title">Додати Зону та Сенсори</h1>
+    <h1 class="welcome-title">Керування Зонами та Сенсорами</h1>
 
     <button type="button" class="btn-login"
             style="margin-top: 10px; background-color:#0a1a2e; border-color: #00bfff;"
@@ -15,31 +15,34 @@
 
     <div class="form-container">
 
-        <!-- СТВОРЕННЯ ЗОНИ -->
+        <!-- =================== СТВОРЕННЯ ЗОНИ =================== -->
         <h2>Нова зона</h2>
         <form id="zoneForm">
             <label>Назва зони:</label>
-            <input type="text" id="zoneName" required />
+            <input type="text" id="zoneName" required placeholder="Наприклад: Кухня" />
+
             <label>Поверх:</label>
-            <input type="number" id="floor" required />
+            <input type="number" id="floor" required min="1" />
+
             <label>Площа (м²):</label>
-            <input type="number" step="0.1" id="area" required />
+            <input type="number" step="0.1" id="area" required min="1" />
+
             <button type="submit" class="btn-submit">Створити Зону</button>
         </form>
-        <p id="zoneResult" style="color:#00ffcc; margin:10px 0;"></p>
+        <p id="zoneResult" style="margin:10px 0; min-height:24px; font-weight:bold;"></p>
 
-        <hr style="margin:20px 0; border-color:#00bfff" />
+        <hr style="margin:30px 0; border-color:#00bfff" />
 
-        <!-- ДОДАВАННЯ СЕНСОРІВ -->
+        <!-- =================== ДОДАВАННЯ СЕНСОРА =================== -->
         <h2>Додати сенсор у зону</h2>
         <label>Оберіть зону:</label>
-        <select id="zoneSelect">
+        <select id="zoneSelectAdd">
             <option value="">— Завантаження зон... —</option>
         </select>
 
         <div class="sensor-entry">
             <label>Назва сенсора:</label>
-            <input type="text" id="sensorName" required />
+            <input type="text" id="sensorName" required placeholder="Напр.: Датчик диму №1" />
 
             <label>Тип сенсора:</label>
             <select id="sensorType">
@@ -48,7 +51,7 @@
                 <option value="Smoke">Дим</option>
             </select>
 
-            <label>Значення:</label>
+            <label>Значення (опціонально):</label>
             <input type="text" id="sensorValue" placeholder="наприклад: 23.5" />
 
             <label>Статус:</label>
@@ -57,39 +60,103 @@
                 <option value="Inactive">Inactive</option>
             </select>
 
-            <p id="sensorResult" style="margin:10px 0; min-height:24px;"></p>
-
+            <p id="sensorResult" style="margin:10px 0; min-height:24px; font-weight:bold;"></p>
             <button type="button" id="createSensorBtn" class="btn-login">Створити сенсор</button>
         </div>
+
+        <hr style="margin:30px 0; border-color:#00bfff" />
+
+        <!-- =================== ВИДАЛЕННЯ ЗОНИ =================== -->
+        <h2 style="color:#ff5555;">Видалити зону</h2>
+        <label>Оберіть зону для видалення:</label>
+        <select id="zoneSelectDelete">
+            <option value="">— Оберіть зону —</option>
+        </select>
+        <p id="deleteZoneResult" style="margin:10px 0; min-height:24px; font-weight:bold;"></p>
+        <button type="button" id="deleteZoneBtn" class="btn-delete">Видалити зону</button>
+
+        <hr style="margin:30px 0; border-color:#00bfff" />
+
+        <!-- =================== ВИДАЛЕННЯ СЕНСОРА =================== -->
+        <h2 style="color:#ff5555;">Видалити сенсор</h2>
+        <label>Оберіть зону:</label>
+        <select id="zoneSelectForSensorDelete">
+            <option value="">— Спочатку оберіть зону —</option>
+        </select>
+
+        <label>Оберіть сенсор:</label>
+        <select id="sensorSelectDelete">
+            <option value="">— Спочатку оберіть зону —</option>
+        </select>
+
+        <p id="deleteSensorResult" style="margin:10px 0; min-height:24px; font-weight:bold;"></p>
+        <button type="button" id="deleteSensorBtn" class="btn-delete">Видалити сенсор</button>
     </div>
 </div>
 
 <script>
-    // Завантаження зон (camelCase!)
-    async function loadZones() {
+    // Загальне завантаження зон
+    async function loadZones(selectId = 'zoneSelectAdd') {
         try {
-            const res = await fetch('/api/zones');  // ← правильно: /api/zones
+            const res = await fetch('/api/zones');
             if (!res.ok) throw new Error('Не вдалося завантажити зони');
             const zones = await res.json();
 
-            const select = document.getElementById('zoneSelect');
-            select.innerHTML = '<option value="">— Оберіть зону —</option>';
-
-            zones.forEach(z => {
-                const opt = document.createElement('option');
-                opt.value = z.id;  // ← camelCase: id
-                opt.textContent = `${z.zoneName} (поверх ${z.floor})`;
-                select.appendChild(opt);
+            // Оновлюємо всі селекти зон
+            ['zoneSelectAdd', 'zoneSelectDelete', 'zoneSelectForSensorDelete'].forEach(id => {
+                const select = document.getElementById(id);
+                if (select) {
+                    select.innerHTML = '<option value="">— Оберіть зону —</option>';
+                    zones.forEach(z => {
+                        const opt = document.createElement('option');
+                        opt.value = z.id;
+                        opt.textContent = `${z.zoneName} (поверх ${z.floor})`;
+                        select.appendChild(opt);
+                    });
+                }
             });
         } catch (err) {
-            document.getElementById('zoneSelect').innerHTML = '<option value="">Помилка завантаження</option>';
+            console.error(err);
         }
     }
 
-    // Створення зони
+    // Завантаження сенсорів для видалення
+    async function loadSensorsForZone(zoneId) {
+        const select = document.getElementById('sensorSelectDelete');
+        select.innerHTML = '<option value="">— Завантаження сенсорів... —</option>';
+
+        if (!zoneId) {
+            select.innerHTML = '<option value="">— Спочатку оберіть зону —</option>';
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/sensors');
+            if (!res.ok) throw new Error('Не вдалося завантажити сенсори');
+            const sensors = await res.json();
+
+            const zoneSensors = sensors.filter(s => s.zoneID === parseInt(zoneId));
+            select.innerHTML = '<option value="">— Оберіть сенсор —</option>';
+
+            if (zoneSensors.length === 0) {
+                select.innerHTML = '<option value="">Немає сенсорів у цій зоні</option>';
+                return;
+            }
+
+            zoneSensors.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.id;
+                opt.textContent = `${s.sensorName} (${s.sensorType}, ${s.status})`;
+                select.appendChild(opt);
+            });
+        } catch (err) {
+            select.innerHTML = '<option value="">Помилка завантаження</option>';
+        }
+    }
+
+    // === Створення зони ===
     document.getElementById('zoneForm').addEventListener('submit', async (e) => {
         e.preventDefault();
-
         const zoneData = {
             zoneName: document.getElementById('zoneName').value.trim(),
             floor: parseInt(document.getElementById('floor').value),
@@ -97,30 +164,26 @@
         };
 
         if (!zoneData.zoneName || isNaN(zoneData.floor) || isNaN(zoneData.area)) {
-            document.getElementById('zoneResult').innerText = "Заповніть усі поля правильно!";
+            document.getElementById('zoneResult').style.color = '#ffaa00';
+            document.getElementById('zoneResult').innerText = "Заповніть усі поля!";
             return;
         }
 
         try {
-            const response = await fetch('/api/zones', {
+            const res = await fetch('/api/zones', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(zoneData)
             });
 
-            if (!response.ok) {
-                const err = await response.json();
-                throw new Error(err.message || 'Помилка сервера');
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.message || 'Не вдалося створити зону');
             }
 
-            const createdZone = await response.json();
             document.getElementById('zoneResult').style.color = '#00ffcc';
-            document.getElementById('zoneResult').innerText = `Зона "${createdZone.zoneName}" створена!`;
-
-            // Очищення форми
+            document.getElementById('zoneResult').innerText = `Зона "${zoneData.zoneName}" створена!`;
             document.getElementById('zoneForm').reset();
-
-            // Оновлення списку
             loadZones();
         } catch (err) {
             document.getElementById('zoneResult').style.color = '#ff5555';
@@ -128,14 +191,10 @@
         }
     });
 
-    // Створення сенсора
+    // === Створення сенсора ===
     document.getElementById('createSensorBtn').addEventListener('click', async () => {
-        const zoneId = document.getElementById('zoneSelect').value;
-        if (!zoneId) {
-            document.getElementById('sensorResult').style.color = '#ffaa00';
-            document.getElementById('sensorResult').innerText = "Спочатку оберіть зону!";
-            return;
-        }
+        const zoneId = document.getElementById('zoneSelectAdd').value;
+        if (!zoneId) return showError('sensorResult', "Оберіть зону!");
 
         const sensorData = {
             sensorName: document.getElementById('sensorName').value.trim(),
@@ -145,11 +204,7 @@
             zoneID: parseInt(zoneId)
         };
 
-        if (!sensorData.sensorName) {
-            document.getElementById('sensorResult').style.color = '#ffaa00';
-            document.getElementById('sensorResult').innerText = "Введіть назву сенсора!";
-            return;
-        }
+        if (!sensorData.sensorName) return showError('sensorResult', "Введіть назву сенсора!");
 
         try {
             const res = await fetch('/api/sensors', {
@@ -160,24 +215,77 @@
 
             if (!res.ok) {
                 const err = await res.json();
-                throw new Error(err.message || 'Помилка створення сенсора');
+                throw new Error(err.message || 'Помилка створення');
             }
 
             document.getElementById('sensorResult').style.color = '#00ffcc';
-            document.getElementById('sensorResult').innerText = "Сенсор успішно додано!";
-
-            // Очищення полів
+            document.getElementById('sensorResult').innerText = "Сенсор додано!";
             document.getElementById('sensorName').value = '';
             document.getElementById('sensorValue').value = '';
-
         } catch (err) {
-            document.getElementById('sensorResult').style.color = '#ff5555';
-            document.getElementById('sensorResult').innerText = "Помилка: " + err.message;
+            showError('sensorResult', err.message);
         }
     });
 
-    // Запуск при завантаженні
-    document.addEventListener('DOMContentLoaded', loadZones);
+    // === Видалення зони ===
+    document.getElementById('deleteZoneBtn').addEventListener('click', async () => {
+        const zoneId = document.getElementById('zoneSelectDelete').value;
+        if (!zoneId) return showError('deleteZoneResult', "Оберіть зону!");
+
+        if (!confirm("УВАГА! Видалити всю зону та всі її сенсори?")) return;
+
+        try {
+            const res = await fetch(`/api/zones/${zoneId}`, { method: 'DELETE' });
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.message || 'Не вдалося видалити');
+            }
+
+            document.getElementById('deleteZoneResult').style.color = '#00ffcc';
+            document.getElementById('deleteZoneResult').innerText = "Зона успішно видалена!";
+            loadZones();
+            loadSensorsForZone(document.getElementById('zoneSelectForSensorDelete').value);
+        } catch (err) {
+            showError('deleteZoneResult', err.message);
+        }
+    });
+
+    // === Видалення сенсора ===
+    document.getElementById('deleteSensorBtn').addEventListener('click', async () => {
+        const sensorId = document.getElementById('sensorSelectDelete').value;
+        if (!sensorId) return showError('deleteSensorResult', "Оберіть сенсор!");
+
+        if (!confirm("Видалити цей сенсор?")) return;
+
+        try {
+            const res = await fetch(`/api/sensors/${sensorId}`, { method: 'DELETE' });
+            if (!res.ok) throw new Error('Не вдалося видалити сенсор');
+
+            document.getElementById('deleteSensorResult').style.color = '#00ffcc';
+            document.getElementById('deleteSensorResult').innerText = "Сенсор видалено!";
+            const zoneId = document.getElementById('zoneSelectForSensorDelete').value;
+            loadSensorsForZone(zoneId);
+        } catch (err) {
+            showError('deleteSensorResult', err.message);
+        }
+    });
+
+    // Реакція на вибір зони для видалення сенсора
+    document.getElementById('zoneSelectForSensorDelete').addEventListener('change', (e) => {
+        loadSensorsForZone(e.target.value);
+    });
+
+    // Допоміжна функція
+    function showError(elementId, message) {
+        const el = document.getElementById(elementId);
+        el.style.color = '#ff5555';
+        el.innerText = message;
+    }
+
+    // Запуск
+    document.addEventListener('DOMContentLoaded', () => {
+        loadZones();
+    });
 </script>
 
 <style>
@@ -194,47 +302,52 @@
 
     .form-wrapper {
         text-align: center;
-        width: 520px;
+        width: 560px;
     }
 
     .form-container {
         background-color: #0d0d0d;
-        padding: 30px;
-        border-radius: 12px;
-        box-shadow: 0 0 20px rgba(0,191,255,0.5);
+        padding: 35px;
+        border-radius: 16px;
+        box-shadow: 0 0 25px rgba(0,191,255,0.6);
     }
 
     h2 {
         color: #00bfff;
-        margin-top: 25px;
+        margin: 30px 0 20px;
     }
+
+        h2[style*="ff5555"] {
+            color: #ff5555 !important;
+        }
 
     label {
         display: block;
-        margin-top: 12px;
+        margin-top: 14px;
         color: #00bfff;
         text-align: left;
+        font-weight: 600;
     }
 
     input, select {
         width: 100%;
-        padding: 10px;
+        padding: 12px;
         margin: 8px 0 16px;
-        border-radius: 6px;
+        border-radius: 8px;
         border: 1px solid #00bfff;
         background: #0a0a0a;
         color: #fff;
         font-size: 16px;
     }
 
-    .btn-submit, .btn-login {
-        padding: 12px;
+    .btn-submit, .btn-login, .btn-delete {
+        padding: 14px;
         width: 100%;
-        margin-top: 15px;
+        margin-top: 20px;
         border: none;
-        border-radius: 6px;
+        border-radius: 8px;
         cursor: pointer;
-        font-weight: 600;
+        font-weight: 700;
         font-size: 16px;
         transition: all 0.3s;
     }
@@ -259,11 +372,20 @@
             color: #0a0a0a;
         }
 
+    .btn-delete {
+        background: #ff3333;
+        color: white;
+    }
+
+        .btn-delete:hover {
+            background: #ff5555;
+        }
+
     .sensor-entry {
         border: 1px solid #00bfff;
         padding: 20px;
         margin: 20px 0;
-        border-radius: 10px;
+        border-radius: 12px;
         background: rgba(0,191,255,0.05);
     }
 </style>
