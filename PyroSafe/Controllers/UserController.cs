@@ -1,7 +1,10 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
 
 [ApiController]
@@ -19,13 +22,12 @@ public class UsersController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> CreateUser([FromBody] UserCreateDto dto)
     {
-        if (!string.IsNullOrEmpty(dto.Email))
-        {
-            var existingUser = await _context.Users
-                .FirstOrDefaultAsync(u => u.Email == dto.Email);
-            if (existingUser != null)
-                return BadRequest("Пользователь с таким email уже существует.");
-        }
+        if (string.IsNullOrWhiteSpace(dto.Username) || string.IsNullOrWhiteSpace(dto.Password))
+            return BadRequest("Ім'я та пароль обов'язкові");
+
+        var existing = await _context.Users.AnyAsync(u => u.Email == dto.Email || u.Username == dto.Username);
+        if (existing)
+            return BadRequest("Користувач з таким email або ім'ям вже існує");
 
         var user = new User
         {
@@ -39,9 +41,25 @@ public class UsersController : ControllerBase
         _context.Users.Add(user);
         await _context.SaveChangesAsync();
 
-        return CreatedAtAction(nameof(GetUserById), new { id = user.ID }, user);
+        return Created($"/api/users/{user.ID}", new { user.ID, user.Username });
     }
 
+    [HttpGet("me")]
+    public IActionResult GetCurrentUser()
+    {
+        if (!User.Identity.IsAuthenticated)
+            return Unauthorized(new { message = "Не авторизований" });
+
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var username = User.FindFirst(ClaimTypes.Name)?.Value;
+
+        return Ok(new
+        {
+            userId,
+            username,
+            isAuthenticated = true
+        });
+    }
     // -------------------- READ --------------------
     // Получить всех пользователей
     [HttpGet]
@@ -117,24 +135,60 @@ public class UsersController : ControllerBase
     }
 
     // POST: api/users/login
+    // POST: api/users/login
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginDto dto)
     {
+        if (string.IsNullOrEmpty(dto.Email) || string.IsNullOrEmpty(dto.Password))
+            return BadRequest("Введіть email та пароль");
+
         var user = await _context.Users
             .FirstOrDefaultAsync(u => u.Email == dto.Email && u.Password == dto.Password);
 
         if (user == null)
-            return BadRequest("Неправильний email або пароль");
+            return BadRequest("Невірний email або пароль");
 
-        // ===== Збереження в сесії =====
-        HttpContext.Session.SetInt32("UserID", user.ID);
+        // === 1. Записуємо в сесію (для зручності в Razor Pages) ===
+        HttpContext.Session.SetInt32("UserId", user.ID);
         HttpContext.Session.SetString("Username", user.Username);
         HttpContext.Session.SetString("Email", user.Email);
         HttpContext.Session.SetString("UserRole", user.UserRole.ToString());
 
-        return Ok(new { user.ID, user.Username, user.Email, user.UserRole });
-    }
+        // === 2. ВХОД ЧЕРЕЗ КУКИ — головне! ===
+        var claims = new List<Claim>
+        {
+            new Claim(ClaimTypes.NameIdentifier, user.ID.ToString()),
+            new Claim(ClaimTypes.Name, user.Username),
+            new Claim(ClaimTypes.Email, user.Email),
+            new Claim(ClaimTypes.Role, user.UserRole ? "Admin" : "User")
+        };
 
+        var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+        var principal = new ClaimsPrincipal(identity);
+
+        await HttpContext.SignInAsync(
+            CookieAuthenticationDefaults.AuthenticationScheme,
+            principal,
+            new AuthenticationProperties
+            {
+                IsPersistent = true,                    // запам'ятовувати між сесіями
+                ExpiresUtc = DateTimeOffset.UtcNow.AddHours(12),
+                AllowRefresh = true
+            });
+
+        return Ok(new
+        {
+            success = true,
+            message = "Успішний вхід",
+            user = new
+            {
+                user.ID,
+                user.Username,
+                user.Email,
+                user.UserRole
+            }
+        });
+    }
 
 
 }

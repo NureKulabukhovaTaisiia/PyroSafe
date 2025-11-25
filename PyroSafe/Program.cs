@@ -1,9 +1,10 @@
-﻿using Microsoft.AspNetCore.Builder;
+﻿using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.OpenApi.Models;
-using Microsoft.AspNetCore.HttpOverrides;
 using System.Diagnostics;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -38,10 +39,22 @@ builder.Services.AddSession(options =>
     options.IdleTimeout = TimeSpan.FromHours(1);
     options.Cookie.HttpOnly = true;
     options.Cookie.IsEssential = true;
-
-    // важливо для Render
     options.Cookie.SameSite = SameSiteMode.Lax;
 });
+
+// ===== АВТЕНТИФІКАЦІЯ — ТУТ! ДО Build() =====
+builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+        options.LoginPath = "/Account/Login";
+        options.LogoutPath = "/Account/Logout";
+        options.ExpireTimeSpan = TimeSpan.FromHours(12);
+        options.SlidingExpiration = true;
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SameSite = SameSiteMode.Lax;
+    });
+
+builder.Services.AddAuthorization(); // теж тут!
 
 // ===== HttpContextAccessor =====
 builder.Services.AddHttpContextAccessor();
@@ -60,49 +73,37 @@ builder.Services.AddSwaggerGen(c =>
 // ===== Forwarded Headers (Render) =====
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
-    options.ForwardedHeaders =
-        ForwardedHeaders.XForwardedFor |
-        ForwardedHeaders.XForwardedProto;
-
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
     options.KnownNetworks.Clear();
     options.KnownProxies.Clear();
 });
 
+// ========== ВСЕ, ЩО НИЖЧЕ — ПІСЛЯ Build() ==========
 var app = builder.Build();
 
-// ===== Forwarded headers =====
 app.UseForwardedHeaders();
 
-// ===== HTTPS redirect =====
 app.UseHttpsRedirection();
-
-// ===== Static files (необхідно!) =====
 app.UseStaticFiles();
-
-// ===== Routing =====
 app.UseRouting();
-
-// ===== CORS =====
 app.UseCors("AllowApp");
-
-// ===== Session =====
 app.UseSession();
 
-// ===== Authorization =====
-app.UseAuthorization();
+// ← ПРАВИЛЬНИЙ ПОРЯДОК!
+app.UseAuthentication();   // ← Обов’язково після UseSession() і перед UseAuthorization()
+app.UseAuthorization();    // ← Після Authentication!
 
-// ===== Controllers & Pages =====
 app.MapControllers();
 app.MapRazorPages();
 
-// ===== Swagger =====
+// Swagger тільки в деві
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
 
-// ===== Auto-open browser (LOCAL ONLY) =====
+// Автовідкриття (локально)
 if (app.Environment.IsDevelopment())
 {
     try

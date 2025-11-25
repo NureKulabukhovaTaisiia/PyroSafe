@@ -6,12 +6,10 @@
 }
 <div class="user-menu">
     <span class="username" onclick="toggleDropdown()">@Model.Username ⬇</span>
-    <div id="dropdown" class="dropdown-content">
-        <form method="post" asp-page="/Account/Logout">
-            @Html.AntiForgeryToken()
-            <button type="submit">Вийти</button>
-        </form>
-
+    <div class="dropdown-content">
+        <a href="/Account/Logout" style="color: #00bfff; text-decoration: none; padding: 10px; display: block;">
+            Вийти
+        </a>
     </div>
 </div>
 

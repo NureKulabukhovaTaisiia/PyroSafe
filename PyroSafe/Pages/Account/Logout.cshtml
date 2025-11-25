@@ -1,6 +1,10 @@
 ﻿@page
 @model PyroSafe.Pages.Account.LogoutModel
+@{
+    // Це виконається автоматично при GET-запиті
+}
 
-<form method="post">
-    <button type="submit">Вийти</button>
-</form>
+<script>
+    // Після очищення сесії — редірект на логін
+    window.location.href = "/Account/Login";
+</script>
