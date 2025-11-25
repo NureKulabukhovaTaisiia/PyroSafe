@@ -1,4 +1,5 @@
-﻿@page
+﻿﻿
+@page
 @model PyroSafe.Pages.User.AddEventAndScenarioModel
 @{
     ViewData["Title"] = "Сценарії та Івенти";
@@ -6,15 +7,19 @@
 
 <div class="form-wrapper">
     <h1 class="welcome-title">Сценарії та Івенти</h1>
-    <button type="button" class="btn-login" onclick="location.href='/User/Home'">На головну</button>
+
+    <button type="button" class="btn-login"
+            onclick="location.href='/User/Home'">
+        На головну
+    </button>
 
     <div class="form-container">
 
         <!-- СТВОРИТИ СЦЕНАРІЙ -->
         <h2 style="color:#00ffcc;">Створити сценарій</h2>
         <div class="entry-box">
-            <input type="text" id="scenarioType" placeholder="Тип (наприклад: Пожежа)" />
-            <input type="text" id="scenarioDesc" placeholder="Опис (не обов’язково)" />
+            <input type="text" id="scenarioType" placeholder="Тип (наприклад: Пожежа)" required />
+            <input type="text" id="scenarioDesc" placeholder="Опис (опціонально)" />
             <select id="scenarioPriority">
                 <option value="Low">Низький</option>
                 <option value="Medium">Середній</option>
@@ -23,17 +28,20 @@
             </select>
             <label><input type="checkbox" id="scenarioActive" checked /> Активний</label>
             <button id="createScenarioBtn" class="btn-submit">Створити сценарій</button>
-            <p id="scenarioResult"></p>
+            <p id="scenarioResult" style="margin:10px 0; min-height:24px; font-weight:bold;"></p>
         </div>
 
         <hr />
 
+        <!-- СПИСОК СЦЕНАРІЇВ -->
         <h2>Сценарії</h2>
-        <div id="scenariosList" class="items-container">Завантаження...</div>
+        <div id="scenariosList" class="items-container">
+            <p style="text-align:center; color:#00bfff;">Завантаження сценаріїв...</p>
+        </div>
 
         <hr />
 
-        <!-- ЗАРЕЄСТРУВАТИ ІВЕНТ -->
+        <!-- СТВОРИТИ ІВЕНТ -->
         <h2 style="color:#ffaa00;">Зареєструвати івент</h2>
         <div class="entry-box">
             <select id="eventSensorSelect"><option>— Оберіть сенсор —</option></select>
@@ -49,45 +57,42 @@
                 <option value="Resolved">Вирішений</option>
             </select>
             <button id="createEventBtn" class="btn-submit">Зареєструвати івент</button>
-            <p id="eventResult"></p>
+            <p id="eventResult" style="margin:10px 0; min-height:24px; font-weight:bold;"></p>
         </div>
 
         <hr />
 
+        <!-- СПИСОК ІВЕНТІВ -->
         <h2>Останні івенти</h2>
-        <div id="eventsList" class="items-container">Завантаження...</div>
+        <div id="eventsList" class="items-container">
+            <p style="text-align:center; color:#00bfff;">Завантаження івентів...</p>
+        </div>
     </div>
 </div>
 
 <script>
-    async function safeJson(res) {
-        if (!res.ok) {
-            const text = await res.text();
-            throw new Error(`HTTP ${res.status}: ${text || res.statusText}`);
-        }
-        const text = await res.text();
-        if (!text) return null;
-        try { return JSON.parse(text); }
-        catch { throw new Error("Некоректний JSON від сервера"); }
-    }
-
     async function loadAllData() {
-        await Promise.allSettled([
+        await Promise.all([
             loadScenarios(),
             loadEvents(),
             loadSensorsAndScenariosForSelects()
         ]);
     }
 
+    // Завантаження сценаріїв
     async function loadScenarios() {
         try {
-            const data = await (await fetch('/api/scenarios')).json();
+            const res = await fetch('/api/scenarios');
+            if (!res.ok) throw new Error('Не вдалося завантажити сценарії');
+            const scenarios = await res.json();
+
             const list = document.getElementById('scenariosList');
-            if (!data?.length) {
-                list.innerHTML = '<p style="color:#888;text-align:center;">Немає сценаріїв</p>';
+            if (scenarios.length === 0) {
+                list.innerHTML = '<p style="color:#888; text-align:center;">Немає створених сценаріїв</p>';
                 return;
             }
-            list.innerHTML = data.map(s => `
+
+            list.innerHTML = scenarios.map(s => `
                 <div class="item-card ${s.isActive ? 'active' : 'inactive'}">
                     <div class="item-header">
                         <strong>${s.scenarioType}</strong>
@@ -95,119 +100,131 @@
                         <span class="status-dot ${s.isActive ? 'active' : 'inactive'}"></span>
                     </div>
                     <p class="description">${s.description || 'Без опису'}</p>
-                    <button class="btn-delete" onclick="deleteScenario(${s.id})">Видалити</button>
+                    <div class="item-actions">
+                        <button class="btn-delete" onclick="deleteScenario(${s.id})">
+                            Видалити
+                        </button>
+                    </div>
                 </div>
             `).join('');
+
         } catch (err) {
-            document.getElementById('scenariosList').innerHTML = `<p style="color:#ff5555;">Помилка: ${err.message}</p>`;
+            document.getElementById('scenariosList').innerHTML = '<p style="color:#ff5555; text-align:center;">Помилка завантаження сценаріїв</p>';
         }
     }
 
-      async function loadEvents() {
+    // Завантаження івентів
+    async function loadEvents() {
         try {
-            const data = await (await fetch('/api/events')).json();
+            const res = await fetch('/api/events');
+            if (!res.ok) throw new Error('Не вдалося завантажити івенти');
+            const events = await res.json();
+
             const list = document.getElementById('eventsList');
-            if (!data?.length) {
-                list.innerHTML = '<p style="color:#888;text-align:center;">Немає івентів</p>';
+            if (events.length === 0) {
+                list.innerHTML = '<p style="color:#888; text-align:center;">Немає івентів</p>';
                 return;
             }
 
-            list.innerHTML = data.map(e => {
-                const date = new Date(e.createdAt).toLocaleString('uk-UA', {
-                    day: '2-digit', month: '2-digit', year: 'numeric',
-                    hour: '2-digit', minute: '2-digit'
-                });
-
-                const severityClass = (e.severity || 'info').toLowerCase();
-                const isResolved = e.status === 'Resolved';
-
-                return `
-                    <div class="item-card severity-${severityClass} ${isResolved ? 'resolved' : ''}">
-                        <div class="item-header">
-                            <strong>Івент #${e.id}</strong>
-                            <span class="severity-badge">${e.severity || 'Info'}</span>
-                            <span class="status-dot ${isResolved ? 'active' : 'inactive'}"></span>
-                        </div>
-                        <p><strong>Сенсор:</strong> ${e.sensorName || 'Невідомий'} |
-                           <strong>Сценарій:</strong> ${e.scenarioName || '—'}</p>
-                        <p class="description">${e.description || 'Без опису'}</p>
-                        <div class="event-meta">
-                            <small>Створено: ${date}</small><br>
-                            <small>Автор: ${e.createdByName || 'Охоронець'} #${e.createdBy}</small>
-                        </div>
-                        <button class="btn-delete" onclick="deleteEvent(${e.id})">Видалити</button>
+            list.innerHTML = events.map(e => `
+                <div class="item-card severity-${e.severity.toLowerCase()} ${e.status === 'Resolved' ? 'resolved' : ''}">
+                    <div class="item-header">
+                        <strong>Івент #${e.id}</strong>
+                        <span class="severity-badge">${e.severity}</span>
+                        <span class="status-dot ${e.status === 'Resolved' ? 'active' : 'inactive'}"></span>
                     </div>
-                `;
-            }).join('');
-
-            // Додаємо звукову сирену для Critical івентів (бонус!)
-            if (data.some(e => e.severity === 'Critical' && e.status !== 'Resolved')) {
-                const audio = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-alarm-tone-1065.mp3');
-                audio.play().catch(() => {});
-            }
+                    <p><strong>Сенсор:</strong> ${e.sensorID} | <strong>Сценарій:</strong> ${e.scenarioID || '—'}</p>
+                    <p class="description">${e.description || 'Без опису'}</p>
+                    <small>${e.resolvedAt ? 'Вирішено: ' + new Date(e.resolvedAt).toLocaleString() : 'Активний'}</small>
+                    <div class="item-actions">
+                        <button class="btn-delete" onclick="deleteEvent(${e.id})">
+                            Видалити
+                        </button>
+                    </div>
+                </div>
+            `).join('');
 
         } catch (err) {
-            document.getElementById('eventsList').innerHTML =
-                `<p style="color:#ff5555;">Помилка: ${err.message}</p>`;
+            document.getElementById('eventsList').innerHTML = '<p style="color:#ff5555; text-align:center;">Помилка завантаження івентів</p>';
         }
     }
 
+    // Завантаження сенсорів і сценаріїв у селекти
     async function loadSensorsAndScenariosForSelects() {
         try {
             const [sensorsRes, scenariosRes] = await Promise.all([
                 fetch('/api/sensors'), fetch('/api/scenarios')
             ]);
-            const sensors = await safeJson(sensorsRes) || [];
-            const scenarios = await safeJson(scenariosRes) || [];
+            const sensors = await sensorsRes.json();
+            const scenarios = await scenariosRes.json();
 
             const sensorSelect = document.getElementById('eventSensorSelect');
             sensorSelect.innerHTML = '<option value="">— Оберіть сенсор —</option>';
-            sensors.forEach(s => sensorSelect.add(new Option(`${s.sensorName} (${s.sensorType})`, s.id)));
+            sensors.forEach(s => {
+                const opt = new Option(`${s.sensorName} (${s.sensorType})`, s.id);
+                sensorSelect.add(opt);
+            });
 
             const scenarioSelect = document.getElementById('eventScenarioSelect');
             scenarioSelect.innerHTML = '<option value="">— Без сценарію —</option>';
-            scenarios.forEach(s => scenarioSelect.add(new Option(`${s.scenarioType}`, s.id)));
+            scenarios.forEach(s => {
+                const opt = new Option(`${s.scenarioType} (${s.priority})`, s.id);
+                scenarioSelect.add(opt);
+            });
         } catch (err) {
-            console.error("Помилка селектів:", err);
+            console.error("Помилка завантаження даних для селектів");
         }
     }
 
-    // === СТВОРЕННЯ СЦЕНАРІЮ ===
-    document.getElementById('createScenarioBtn').onclick = async () => {
+    // Створення сценарію
+    document.getElementById('createScenarioBtn').addEventListener('click', async () => {
         const data = {
             scenarioType: document.getElementById('scenarioType').value.trim(),
             description: document.getElementById('scenarioDesc').value.trim(),
             priority: document.getElementById('scenarioPriority').value,
             isActive: document.getElementById('scenarioActive').checked
         };
-        if (!data.scenarioType) return showMsg('scenarioResult', 'Введіть тип!', '#ffaa00');
+
+        if (!data.scenarioType) {
+            showMessage('scenarioResult', 'Введіть тип сценарію!', 'warning');
+            return;
+        }
 
         try {
-            await fetch('/api/scenarios', {
+            const res = await fetch('/api/scenarios', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)
             });
-            showMsg('scenarioResult', 'Сценарій створено!', '#00ffcc');
-            document.getElementById('scenarioType').value = '';
-            loadAllData();
-        } catch (err) {
-            showMsg('scenarioResult', err.message, '#ff5555');
-        }
-    };
 
-    // === СТВОРЕННЯ ІВЕНТУ ===
-    document.getElementById('createEventBtn').onclick = async () => {
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.message || 'Помилка створення');
+            }
+
+            showMessage('scenarioResult', 'Сценарій створено!', 'success');
+            document.getElementById('scenarioType').value = '';
+            document.getElementById('scenarioDesc').value = '';
+            loadScenarios();
+            loadSensorsAndScenariosForSelects();
+        } catch (err) {
+            showMessage('scenarioResult', err.message, 'error');
+        }
+    });
+
+    // Створення івенту
+    document.getElementById('createEventBtn').addEventListener('click', async () => {
         const data = {
-            sensorID: +document.getElementById('eventSensorSelect').value,
-            scenarioID: document.getElementById('eventScenarioSelect').value ? +document.getElementById('eventScenarioSelect').value : null,
+            sensorID: parseInt(document.getElementById('eventSensorSelect').value),
+            scenarioID: document.getElementById('eventScenarioSelect').value ? parseInt(document.getElementById('eventScenarioSelect').value) : null,
             description: document.getElementById('eventDesc').value.trim(),
             severity: document.getElementById('eventSeverity').value,
             status: document.getElementById('eventStatus').value
         };
 
         if (!data.sensorID || !data.description) {
-            return showMsg('eventResult', 'Заповніть сенсор та опис!', '#ffaa00');
+            showMessage('eventResult', 'Заповніть усі поля!', 'warning');
+            return;
         }
 
         try {
@@ -216,215 +233,275 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)
             });
-            if (!res.ok) throw new Error('Не вдалося створити івент');
-            showMsg('eventResult', 'Івент зареєстровано!', '#00ffcc');
+
+            if (!res.ok) throw new Error('Помилка створення івенту');
+
+            showMessage('eventResult', 'Івент зареєстровано!', 'success');
             document.getElementById('eventDesc').value = '';
             loadEvents();
         } catch (err) {
-            showMsg('eventResult', err.message, '#ff5555');
+            showMessage('eventResult', err.message, 'error');
+        }
+    });
+
+    // ВИДАЛЕННЯ СЦЕНАРІЮ
+    window.deleteScenario = async (id) => {
+        if (!confirm('УВАГА! Видалити сценарій назавжди?')) return;
+
+        try {
+            const res = await fetch(`/api/scenarios/${id}`, { method: 'DELETE' });
+            if (!res.ok) {
+                const err = await res.json();
+                alert('Не вдалося видалити: ' + (err.message || 'Є пов’язані івенти'));
+                return;
+            }
+            showMessage('scenarioResult', 'Сценарій видалено!', 'success');
+            loadScenarios();
+            loadSensorsAndScenariosForSelects();
+        } catch (err) {
+            alert('Помилка видалення');
         }
     };
 
-    // Видалення
-    window.deleteScenario = id => confirm('Видалити сценарій?') && fetch(`/api/scenarios/${id}`, { method: 'DELETE' }).then(() => loadAllData());
-    window.deleteEvent = id => confirm('Видалити івент?') && fetch(`/api/events/${id}`, { method: 'DELETE' }).then(() => loadEvents());
+    // ВИДАЛЕННЯ ІВЕНТУ
+    window.deleteEvent = async (id) => {
+        if (!confirm('Видалити цей івент?')) return;
 
-    function showMsg(id, text, color) {
-        const el = document.getElementById(id);
-        el.innerHTML = text;
-        el.style.color = color;
-        setTimeout(() => el.innerHTML = '', 5000);
+        try {
+            const res = await fetch(`/api/events/${id}`, { method: 'DELETE' });
+            if (!res.ok) throw new Error('Не вдалося видалити');
+
+            showMessage('eventResult', 'Івент видалено!', 'success');
+            loadEvents();
+        } catch (err) {
+            alert('Помилка видалення івенту');
+        }
+    };
+
+    // Допоміжна функція для повідомлень
+    function showMessage(elementId, text, type) {
+        const el = document.getElementById(elementId);
+        el.innerText = text;
+        el.style.color = type === 'success' ? '#00ffcc' : type === 'error' ? '#ff5555' : '#ffaa00';
     }
 
-    // Автовибір сенсора з URL
-    const urlParams = new URLSearchParams(location.search);
-    const sensorId = urlParams.get('sensorId');
-    if (sensorId) setTimeout(() => document.getElementById('eventSensorSelect').value = sensorId, 1000);
-
+    // Запуск
     document.addEventListener('DOMContentLoaded', loadAllData);
 </script>
+
 <style>
-    /* БАЗОВИЙ СТИЛЬ КАРТКИ */
-    .item-card {
-        background: rgba(10, 25, 49, 0.7);
+    body {
+        font-family: 'Segoe UI', sans-serif;
+        background: linear-gradient(135deg,#0a0a0a,#0a1a2e);
+        color: #fff;
+        display: flex;
+        justify-content: center;
+        padding: 30px 20px;
+        min-height: 100vh;
+    }
+
+    .form-wrapper {
+        width: 740px;
+        text-align: center;
+    }
+
+    .form-container {
+        background: #0d0d0d;
+        padding: 40px;
+        border-radius: 16px;
+        box-shadow: 0 0 30px rgba(0,191,255,0.7);
+    }
+
+    h2 {
+        color: #00bfff;
+        margin: 35px 0 20px;
+        font-size: 24px;
+    }
+
+    .entry-box {
+        background: rgba(0,191,255,0.08);
+        padding: 25px;
         border-radius: 12px;
-        padding: 16px;
+        border: 1px solid #00bfff;
+        margin-bottom: 25px;
+    }
+
+    input, select {
+        width: 100%;
+        padding: 14px;
         margin: 12px 0;
-        border-left: 6px solid;
-        backdrop-filter: blur(10px);
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-        transition: all 0.4s ease;
+        background: #0a0a0a;
+        border: 1px solid #00bfff;
+        border-radius: 8px;
+        color: #fff;
+        font-size: 16px;
+    }
+
+    label > input[type=checkbox] {
+        width: auto;
+        vertical-align: middle;
+        margin-left: 8px;
+    }
+
+    .btn-submit, .btn-login {
+        padding: 16px;
+        width: 100%;
+        margin: 20px 0;
+        background: #00bfff;
+        color: #000;
+        border: none;
+        border-radius: 10px;
+        font-weight: bold;
+        font-size: 17px;
+        cursor: pointer;
+        transition: 0.3s;
+    }
+
+    .btn-login {
+        background: #0a0a0a;
+        border: 2px solid #00bfff;
+        color: #00bfff;
+    }
+
+        .btn-login:hover, .btn-submit:hover {
+            background: #00ffff;
+            color: #000;
+        }
+
+    .items-container {
+        max-height: 500px;
+        overflow-y: auto;
+        padding: 10px;
+    }
+
+    .item-card {
+        background: rgba(0,191,255,0.08);
+        padding: 18px;
+        margin: 15px 0;
+        border-radius: 12px;
+        border-left: 5px solid #00bfff;
         position: relative;
+        transition: all 0.3s;
     }
 
         .item-card:hover {
-            transform: translateY(-6px);
-            box-shadow: 0 0 30px rgba(0, 191, 255, 0.7);
+            transform: translateY(-3px);
+            box-shadow: 0 0 20px rgba(0,191,255,0.4);
         }
 
-    /* КОЛЬОРИ ЗА ТЯЖКІСТЮ */
-    .severity-info {
-        border-left-color: #00ffff;
-        background: linear-gradient(90deg, rgba(0, 255, 255, 0.1), transparent);
+        .item-card.resolved {
+            opacity: 0.75;
+            border-left-color: #00ff00;
+        }
+
+    .severity-critical {
+        border-left-color: #ff0000 !important;
     }
 
     .severity-warning {
-        border-left-color: #ffaa00;
-        background: linear-gradient(90deg, rgba(255, 170, 0, 0.15), transparent);
+        border-left-color: #ffaa00 !important;
     }
 
-    .severity-critical {
-        border-left-color: #ff0066;
-        background: linear-gradient(90deg, rgba(255, 0, 102, 0.2), transparent);
-        animation: pulse-red 2s infinite;
-    }
-
-    .resolved {
-        opacity: 0.7;
-        border-left-color: #00ff88 !important;
-        background: linear-gradient(90deg, rgba(0, 255, 136, 0.15), transparent) !important;
-    }
-
-    /* ЗАГОЛОВОК КАРТКИ */
     .item-header {
         display: flex;
+        justify-content: space-between;
         align-items: center;
-        gap: 12px;
-        margin-bottom: 8px;
         flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 8px;
     }
 
-        .item-header strong {
-            font-size: 1.2em;
-            color: #00ffff;
-        }
-
-    .severity-badge {
-        background: rgba(255, 255, 255, 0.2);
-        color: white;
-        padding: 4px 12px;
+    .priority-badge, .severity-badge {
+        padding: 6px 12px;
         border-radius: 20px;
-        font-size: 0.85em;
+        font-size: 13px;
         font-weight: bold;
     }
 
-    .status-dot {
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
-        background: #ff5555;
-        display: inline-block;
+    .priority-low {
+        background: #00ff0033;
+        color: #00ff00;
     }
 
-        .status-dot.active {
-            background: #00ff88;
-            box-shadow: 0 0 15px #00ff88;
-            animation: pulse-green 2s infinite;
-        }
+    .priority-medium {
+        background: #ffaa0033;
+        color: #ffaa00;
+    }
 
-        .status-dot.inactive {
-            background: #666;
-        }
+    .priority-high {
+        background: #ff550033;
+        color: #ff5555;
+    }
 
-    /* ОПИС ТА МЕТА */
+    .priority-critical {
+        background: #ff000033;
+        color: #ff0000;
+    }
+
     .description {
         margin: 10px 0;
-        color: #cccccc;
-        font-style: italic;
+        font-size: 15px;
+        color: #ccc;
     }
 
-    .event-meta {
-        margin-top: 12px;
-        font-size: 0.9em;
-        color: #88dddd;
-    }
-
-        .event-meta small {
-            display: block;
-            margin: 3px 0;
-        }
-
-    /* КНОПКА ВИДАЛЕННЯ */
-    .btn-delete {
+    .item-actions {
         position: absolute;
-        top: 10px;
-        right: 10px;
-        background: rgba(255, 85, 85, 0.2);
-        border: 1px solid #ff5555;
-        color: #ff8888;
-        padding: 6px 10px;
-        border-radius: 6px;
-        font-size: 0.8em;
+        top: 12px;
+        right: 12px;
+    }
+
+    .btn-delete {
+        background: #ff3333;
+        color: white;
+        border: none;
+        padding: 8px 14px;
+        border-radius: 8px;
+        font-size: 13px;
         cursor: pointer;
-        transition: all 0.3s;
     }
 
         .btn-delete:hover {
             background: #ff5555;
-            color: white;
-            transform: scale(1.1);
         }
 
-    /* АНІМАЦІЇ */
+    .status-dot {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+
+        .status-dot.active {
+            background: #00ff00;
+            box-shadow: 0 0 15px #00ff0088;
+            animation: pulse-green 2s infinite ease-in-out;
+        }
+
+        .status-dot.inactive {
+            background: #ff0000;
+            box-shadow: 0 0 15px #ff000088;
+            animation: pulse-red 2s infinite ease-in-out;
+        }
+
     @@keyframes pulse-green {
-        0%, 100%
+        0%, 100% {
+            box-shadow: 0 0 15px #00ff0088;
+        }
 
-    {
-        box-shadow: 0 0 15px #00ff0088;
-    }
-
-    50% {
-        box-shadow: 0 0 35px #00ff00ee;
-    }
-
+        50% {
+            box-shadow: 0 0 35px #00ff00ee;
+            transform: scale(1.3);
+        }
     }
 
     @@keyframes pulse-red {
-        0%, 100%
+        0%, 100% {
+            box-shadow: 0 0 15px #ff000088;
+        }
 
-    {
-        box-shadow: 0 0 15px #ff000088;
-    }
-
-    50% {
-        box-shadow: 0 0 35px #ff0000ee;
-    }
-
-    }
-
-    /* АКТИВНІ/НЕАКТИВНІ СЦЕНАРІЇ */
-    .active {
-        border-left-color: #00ff88;
-    }
-
-    .inactive {
-        border-left-color: #666;
-        opacity: 0.6;
-    }
-
-    .priority-badge {
-        padding: 3px 8px;
-        border-radius: 6px;
-        font-size: 0.8em;
-        margin-left: 8px;
-    }
-
-    .priority-low {
-        background: #444;
-    }
-
-    .priority-medium {
-        background: #0066cc;
-    }
-
-    .priority-high {
-        background: #ffaa00;
-        color: black;
-    }
-
-    .priority-critical {
-        background: #ff0066;
-        color: white;
-        animation: pulse-red 3s infinite;
+        50% {
+            box-shadow: 0 0 35px #ff0000ee;
+            transform: scale(1.3);
+        }
     }
 </style>
