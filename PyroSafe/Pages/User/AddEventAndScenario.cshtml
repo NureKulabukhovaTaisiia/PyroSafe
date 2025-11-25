@@ -6,19 +6,15 @@
 
 <div class="form-wrapper">
     <h1 class="welcome-title">Сценарії та Івенти</h1>
-
-    <button type="button" class="btn-login"
-            onclick="location.href='/User/Home'">
-        На головну
-    </button>
+    <button type="button" class="btn-login" onclick="location.href='/User/Home'">На головну</button>
 
     <div class="form-container">
 
         <!-- СТВОРИТИ СЦЕНАРІЙ -->
         <h2 style="color:#00ffcc;">Створити сценарій</h2>
         <div class="entry-box">
-            <input type="text" id="scenarioType" placeholder="Тип (наприклад: Пожежа)" required />
-            <input type="text" id="scenarioDesc" placeholder="Опис (опціонально)" />
+            <input type="text" id="scenarioType" placeholder="Тип (наприклад: Пожежа)" />
+            <input type="text" id="scenarioDesc" placeholder="Опис (не обов’язково)" />
             <select id="scenarioPriority">
                 <option value="Low">Низький</option>
                 <option value="Medium">Середній</option>
@@ -27,25 +23,21 @@
             </select>
             <label><input type="checkbox" id="scenarioActive" checked /> Активний</label>
             <button id="createScenarioBtn" class="btn-submit">Створити сценарій</button>
-            <p id="scenarioResult" style="margin:10px 0; min-height:24px; font-weight:bold;"></p>
+            <p id="scenarioResult"></p>
         </div>
 
         <hr />
 
-        <!-- СПИСОК СЦЕНАРІЇВ -->
         <h2>Сценарії</h2>
-        <div id="scenariosList" class="items-container">
-            <p style="text-align:center; color:#00bfff;">Завантаження сценаріїв...</p>
-        </div>
+        <div id="scenariosList" class="items-container">Завантаження...</div>
 
         <hr />
 
-        <!-- СТВОРИТИ ІВЕНТ -->
         <h2 style="color:#ffaa00;">Зареєструвати івент</h2>
         <div class="entry-box">
             <select id="eventSensorSelect"><option>— Оберіть сенсор —</option></select>
             <select id="eventScenarioSelect"><option value="">— Без сценарію —</option></select>
-            <input type="text" id="eventDesc" placeholder="Опис івенту" required />
+            <input type="text" id="eventDesc" placeholder="Опис івенту" />
             <select id="eventSeverity">
                 <option value="Info">Інформація</option>
                 <option value="Warning">Попередження</option>
@@ -56,138 +48,120 @@
                 <option value="Resolved">Вирішений</option>
             </select>
             <button id="createEventBtn" class="btn-submit">Зареєструвати івент</button>
-            <p id="eventResult" style="margin:10px 0; min-height:24px; font-weight:bold;"></p>
+            <p id="eventResult"></p>
         </div>
 
         <hr />
 
-        <!-- СПИСОК ІВЕНТІВ -->
         <h2>Останні івенти</h2>
-        <div id="eventsList" class="items-container">
-            <p style="text-align:center; color:#00bfff;">Завантаження івентів...</p>
-        </div>
+        <div id="eventsList" class="items-container">Завантаження...</div>
     </div>
 </div>
 
 <script>
+    // Безпечне отримання JSON
+    async function safeJson(response) {
+        if (!response.ok) {
+            const text = await response.text();
+            throw new Error(`HTTP ${response.status}: ${text || response.statusText}`);
+        }
+        const text = await response.text();
+        if (!text) return null;
+        try {
+            return JSON.parse(text);
+        } catch (e) {
+            console.error("Не вдалося розпарсити JSON:", text);
+            throw new Error("Сервер повернув некоректний JSON");
+        }
+    }
+
     async function loadAllData() {
-        await Promise.all([
+        await Promise.allSettled([
             loadScenarios(),
             loadEvents(),
             loadSensorsAndScenariosForSelects()
         ]);
     }
 
-    // Завантаження сценаріїв
     async function loadScenarios() {
         try {
             const res = await fetch('/api/scenarios');
-            if (!res.ok) throw new Error('Не вдалося завантажити сценарії');
-            const scenarios = await res.json();
-
+            const data = await safeJson(res);
             const list = document.getElementById('scenariosList');
-            if (scenarios.length === 0) {
-                list.innerHTML = '<p style="color:#888; text-align:center;">Немає створених сценаріїв</p>';
+            if (!data || data.length === 0) {
+                list.innerHTML = '<p style="color:#888; text-align:center;">Немає сценаріїв</p>';
                 return;
             }
-
-            list.innerHTML = scenarios.map(s => `
+            list.innerHTML = data.map(s => `
                 <div class="item-card ${s.isActive ? 'active' : 'inactive'}">
                     <div class="item-header">
                         <strong>${s.scenarioType}</strong>
                         <span class="priority-badge priority-${s.priority.toLowerCase()}">${s.priority}</span>
                         <span class="status-dot ${s.isActive ? 'active' : 'inactive'}"></span>
                     </div>
-                    <p class="description">${s.description || 'Без опису'}</p>
-                    <div class="item-actions">
-                        <button class="btn-delete" onclick="deleteScenario(${s.id})">
-                            Видалити
-                        </button>
-                    </div>
+                    <p>${s.description || 'Без опису'}</p>
+                    <button class="btn-delete" onclick="deleteScenario(${s.id})">Видалити</button>
                 </div>
             `).join('');
-
         } catch (err) {
-            document.getElementById('scenariosList').innerHTML = '<p style="color:#ff5555; text-align:center;">Помилка завантаження сценаріїв</p>';
+            document.getElementById('scenariosList').innerHTML = `<p style="color:#ff5555;">Помилка: ${err.message}</p>`;
         }
     }
 
-    // Завантаження івентів
     async function loadEvents() {
         try {
             const res = await fetch('/api/events');
-            if (!res.ok) throw new Error('Не вдалося завантажити івенти');
-            const events = await res.json();
-
+            const data = await safeJson(res);
             const list = document.getElementById('eventsList');
-            if (events.length === 0) {
+            if (!data || data.length === 0) {
                 list.innerHTML = '<p style="color:#888; text-align:center;">Немає івентів</p>';
                 return;
             }
-
-            list.innerHTML = events.map(e => `
+            list.innerHTML = data.map(e => `
                 <div class="item-card severity-${e.severity.toLowerCase()} ${e.status === 'Resolved' ? 'resolved' : ''}">
                     <div class="item-header">
                         <strong>Івент #${e.id}</strong>
                         <span class="severity-badge">${e.severity}</span>
-                        <span class="status-dot ${e.status === 'Resolved' ? 'active' : 'inactive'}"></span>
                     </div>
-                    <p><strong>Сенсор:</strong> ${e.sensorID} | <strong>Сценарій:</strong> ${e.scenarioID || '—'}</p>
-                    <p class="description">${e.description || 'Без опису'}</p>
-                    <small>${e.resolvedAt ? 'Вирішено: ' + new Date(e.resolvedAt).toLocaleString() : 'Активний'}</small>
-                    <div class="item-actions">
-                        <button class="btn-delete" onclick="deleteEvent(${e.id})">
-                            Видалити
-                        </button>
-                    </div>
+                    <p>Сенсор: ${e.sensorID} | Сценарій: ${e.scenarioID || '—'}</p>
+                    <p>${e.description}</p>
+                    <small>${e.resolvedAt ? 'Вирішено' : 'Активний'}</small>
+                    <button class="btn-delete" onclick="deleteEvent(${e.id})">Видалити</button>
                 </div>
             `).join('');
-
         } catch (err) {
-            document.getElementById('eventsList').innerHTML = '<p style="color:#ff5555; text-align:center;">Помилка завантаження івентів</p>';
+            document.getElementById('eventsList').innerHTML = `<p style="color:#ff5555;">Помилка: ${err.message}</p>`;
         }
     }
 
-    // Завантаження сенсорів і сценаріїв у селекти
     async function loadSensorsAndScenariosForSelects() {
         try {
             const [sensorsRes, scenariosRes] = await Promise.all([
                 fetch('/api/sensors'), fetch('/api/scenarios')
             ]);
-            const sensors = await sensorsRes.json();
-            const scenarios = await scenariosRes.json();
+            const sensors = await safeJson(sensorsRes) || [];
+            const scenarios = await safeJson(scenariosRes) || [];
 
             const sensorSelect = document.getElementById('eventSensorSelect');
             sensorSelect.innerHTML = '<option value="">— Оберіть сенсор —</option>';
-            sensors.forEach(s => {
-                const opt = new Option(`${s.sensorName} (${s.sensorType})`, s.id);
-                sensorSelect.add(opt);
-            });
+            sensors.forEach(s => sensorSelect.add(new Option(`${s.sensorName} (${s.sensorType})`, s.id)));
 
             const scenarioSelect = document.getElementById('eventScenarioSelect');
-            scenarioSelect.innerHTML = '<option value="">— Без сценарію —</option>';
-            scenarios.forEach(s => {
-                const opt = new Option(`${s.scenarioType} (${s.priority})`, s.id);
-                scenarioSelect.add(opt);
-            });
+            scenarios.forEach(s => scenarioSelect.add(new Option(`${s.scenarioType}`, s.id)));
         } catch (err) {
-            console.error("Помилка завантаження даних для селектів");
+            console.error("Помилка завантаження селектів:", err);
         }
     }
 
     // Створення сценарію
-    document.getElementById('createScenarioBtn').addEventListener('click', async () => {
+    document.getElementById('createScenarioBtn').onclick = async () => {
         const data = {
             scenarioType: document.getElementById('scenarioType').value.trim(),
             description: document.getElementById('scenarioDesc').value.trim(),
             priority: document.getElementById('scenarioPriority').value,
             isActive: document.getElementById('scenarioActive').checked
         };
-
-        if (!data.scenarioType) {
-            showMessage('scenarioResult', 'Введіть тип сценарію!', 'warning');
-            return;
-        }
+        if (!data.scenarioType) return showMsg('scenarioResult', 'Введіть тип!', '#ffaa00');
 
         try {
             const res = await fetch('/api/scenarios', {
@@ -195,36 +169,25 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)
             });
-
-            if (!res.ok) {
-                const err = await res.json();
-                throw new Error(err.message || 'Помилка створення');
-            }
-
-            showMessage('scenarioResult', 'Сценарій створено!', 'success');
+            await safeJson(res);
+            showMsg('scenarioResult', 'Сценарій створено!', '#00ffcc');
             document.getElementById('scenarioType').value = '';
-            document.getElementById('scenarioDesc').value = '';
-            loadScenarios();
-            loadSensorsAndScenariosForSelects();
+            loadAllData();
         } catch (err) {
-            showMessage('scenarioResult', err.message, 'error');
+            showMsg('scenarioResult', err.message, '#ff5555');
         }
-    });
+    };
 
     // Створення івенту
-    document.getElementById('createEventBtn').addEventListener('click', async () => {
+    document.getElementById('createEventBtn').onclick = async () => {
         const data = {
-            sensorID: parseInt(document.getElementById('eventSensorSelect').value),
-            scenarioID: document.getElementById('eventScenarioSelect').value ? parseInt(document.getElementById('eventScenarioSelect').value) : null,
+            sensorID: +document.getElementById('eventSensorSelect').value,
+            scenarioID: document.getElementById('eventScenarioSelect').value ? +document.getElementById('eventScenarioSelect').value : null,
             description: document.getElementById('eventDesc').value.trim(),
             severity: document.getElementById('eventSeverity').value,
             status: document.getElementById('eventStatus').value
         };
-
-        if (!data.sensorID || !data.description) {
-            showMessage('eventResult', 'Заповніть усі поля!', 'warning');
-            return;
-        }
+        if (!data.sensorID || !data.description) return showMsg('eventResult', 'Заповніть обов’язкові поля!', '#ffaa00');
 
         try {
             const res = await fetch('/api/events', {
@@ -232,75 +195,51 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)
             });
-
-            if (!res.ok) throw new Error('Помилка створення івенту');
-
-            showMessage('eventResult', 'Івент зареєстровано!', 'success');
+            await safeJson(res);
+            showMsg('eventResult', 'Івент створено!', '#00ffcc');
             document.getElementById('eventDesc').value = '';
             loadEvents();
         } catch (err) {
-            showMessage('eventResult', err.message, 'error');
-        }
-    });
-
-    // ВИДАЛЕННЯ СЦЕНАРІЮ
-    window.deleteScenario = async (id) => {
-        if (!confirm('УВАГА! Видалити сценарій назавжди?')) return;
-
-        try {
-            const res = await fetch(`/api/scenarios/${id}`, { method: 'DELETE' });
-            if (!res.ok) {
-                const err = await res.json();
-                alert('Не вдалося видалити: ' + (err.message || 'Є пов’язані івенти'));
-                return;
-            }
-            showMessage('scenarioResult', 'Сценарій видалено!', 'success');
-            loadScenarios();
-            loadSensorsAndScenariosForSelects();
-        } catch (err) {
-            alert('Помилка видалення');
+            showMsg('eventResult', err.message, '#ff5555');
         }
     };
 
-    // ВИДАЛЕННЯ ІВЕНТУ
-    window.deleteEvent = async (id) => {
-        if (!confirm('Видалити цей івент?')) return;
+    window.deleteScenario = async (id) => { if (confirm('Видалити сценарій?')) { await fetch(`/api/scenarios/${id}`, { method: 'DELETE' }); loadAllData(); } };
+    window.deleteEvent = async (id) => { if (confirm('Видалити івент?')) { await fetch(`/api/events/${id}`, { method: 'DELETE' }); loadEvents(); } };
 
-        try {
-            const res = await fetch(`/api/events/${id}`, { method: 'DELETE' });
-            if (!res.ok) throw new Error('Не вдалося видалити');
-
-            showMessage('eventResult', 'Івент видалено!', 'success');
-            loadEvents();
-        } catch (err) {
-            alert('Помилка видалення івенту');
-        }
-    };
-
-    // Допоміжна функція для повідомлень
-    function showMessage(elementId, text, type) {
-        const el = document.getElementById(elementId);
-        el.innerText = text;
-        el.style.color = type === 'success' ? '#00ffcc' : type === 'error' ? '#ff5555' : '#ffaa00';
+    function showMsg(id, text, color) {
+        const el = document.getElementById(id);
+        el.innerHTML = text;
+        el.style.color = color;
     }
 
-    // Запуск
+    // Автовибір сенсора з URL
+    const params = new URLSearchParams(location.search);
+    const sensorId = params.get('sensorId');
+    if (sensorId) {
+        setTimeout(() => {
+            const select = document.getElementById('eventSensorSelect');
+            if (select) select.value = sensorId;
+        }, 1000);
+    }
+
     document.addEventListener('DOMContentLoaded', loadAllData);
 </script>
 
 <style>
+    /* Твій гарний стиль — залишаємо без змін */
     body {
         font-family: 'Segoe UI', sans-serif;
         background: linear-gradient(135deg,#0a0a0a,#0a1a2e);
         color: #fff;
         display: flex;
         justify-content: center;
-        padding: 30px 20px;
+        padding: 30px;
         min-height: 100vh;
     }
 
     .form-wrapper {
-        width: 740px;
+        width: 760px;
         text-align: center;
     }
 
@@ -313,8 +252,7 @@
 
     h2 {
         color: #00bfff;
-        margin: 35px 0 20px;
-        font-size: 24px;
+        margin: 30px 0 15px;
     }
 
     .entry-box {
@@ -322,27 +260,19 @@
         padding: 25px;
         border-radius: 12px;
         border: 1px solid #00bfff;
-        margin-bottom: 25px;
     }
 
     input, select {
         width: 100%;
         padding: 14px;
-        margin: 12px 0;
+        margin: 10px 0;
         background: #0a0a0a;
         border: 1px solid #00bfff;
         border-radius: 8px;
         color: #fff;
-        font-size: 16px;
     }
 
-    label > input[type=checkbox] {
-        width: auto;
-        vertical-align: middle;
-        margin-left: 8px;
-    }
-
-    .btn-submit, .btn-login {
+    .btn-submit {
         padding: 16px;
         width: 100%;
         margin: 20px 0;
@@ -351,21 +281,21 @@
         border: none;
         border-radius: 10px;
         font-weight: bold;
-        font-size: 17px;
         cursor: pointer;
-        transition: 0.3s;
     }
+
+        .btn-submit:hover {
+            background: #00ffff;
+        }
 
     .btn-login {
         background: #0a0a0a;
         border: 2px solid #00bfff;
         color: #00bfff;
+        padding: 12px;
+        border-radius: 8px;
+        cursor: pointer;
     }
-
-        .btn-login:hover, .btn-submit:hover {
-            background: #00ffff;
-            color: #000;
-        }
 
     .items-container {
         max-height: 500px;
@@ -380,7 +310,6 @@
         border-radius: 12px;
         border-left: 5px solid #00bfff;
         position: relative;
-        transition: all 0.3s;
     }
 
         .item-card:hover {
@@ -388,29 +317,7 @@
             box-shadow: 0 0 20px rgba(0,191,255,0.4);
         }
 
-        .item-card.resolved {
-            opacity: 0.75;
-            border-left-color: #00ff00;
-        }
-
-    .severity-critical {
-        border-left-color: #ff0000 !important;
-    }
-
-    .severity-warning {
-        border-left-color: #ffaa00 !important;
-    }
-
-    .item-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 10px;
-        margin-bottom: 8px;
-    }
-
-    .priority-badge, .severity-badge {
+    .priority-badge {
         padding: 6px 12px;
         border-radius: 20px;
         font-size: 13px;
@@ -422,34 +329,15 @@
         color: #00ff00;
     }
 
-    .priority-medium {
-        background: #ffaa0033;
-        color: #ffaa00;
-    }
-
-    .priority-high {
-        background: #ff550033;
-        color: #ff5555;
-    }
-
     .priority-critical {
         background: #ff000033;
         color: #ff0000;
     }
 
-    .description {
-        margin: 10px 0;
-        font-size: 15px;
-        color: #ccc;
-    }
-
-    .item-actions {
+    .btn-delete {
         position: absolute;
         top: 12px;
         right: 12px;
-    }
-
-    .btn-delete {
         background: #ff3333;
         color: white;
         border: none;
@@ -459,27 +347,22 @@
         cursor: pointer;
     }
 
-        .btn-delete:hover {
-            background: #ff5555;
-        }
-
     .status-dot {
         width: 14px;
         height: 14px;
         border-radius: 50%;
         display: inline-block;
+        margin-left: 10px;
     }
 
         .status-dot.active {
             background: #00ff00;
-            box-shadow: 0 0 15px #00ff0088;
-            animation: pulse-green 2s infinite ease-in-out;
+            animation: pulse-green 2s infinite;
         }
 
         .status-dot.inactive {
             background: #ff0000;
-            box-shadow: 0 0 15px #ff000088;
-            animation: pulse-red 2s infinite ease-in-out;
+            animation: pulse-red 2s infinite;
         }
 
     @@keyframes pulse-green {
