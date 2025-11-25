@@ -117,7 +117,7 @@ namespace PyroSafe.Pages.User
             }
             catch (Exception ex)
             {
-                // Навіть якщо email не відправився — файл доступний
+                // Навіть якщо email не відправився — файл доступний12312
                 return new JsonResult(new
                 {
                     success = true,
