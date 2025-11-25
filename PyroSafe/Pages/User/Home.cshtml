@@ -275,53 +275,49 @@
         padding: 40px;
     }
 
-    /* === ІНДИКАТОРИ === */
     .status-dot {
         width: 12px;
         height: 12px;
         border-radius: 50%;
         background: #ff5555;
         box-shadow: 0 0 10px #ff5555;
+        transition: all 0.3s;
     }
 
-    /* Зелений — активний */
+    /* АКТИВНИЙ — зелений + пульсація */
     .sensor-item.active .status-dot {
         background: #00ff00;
-        animation: pulse-green 2s infinite;
+        box-shadow: 0 0 15px #00ff0088; /* ← ОБОВ’ЯЗКОВО! Базовий стан */
+        animation: pulse-green 2s infinite ease-in-out;
     }
 
-    /* Червоний — неактивний (тепер теж пульсує!) */
+    /* НЕАКТИВНИЙ — червоний + пульсація */
     .sensor-item.inactive .status-dot {
         background: #ff0000;
-        animation: pulse-red 2s infinite;
+        box-shadow: 0 0 15px #ff000088;
+        animation: pulse-red 2s infinite ease-in-out;
     }
 
-    /* === АНІМАЦІЇ === */
+    /* === АНІМАЦІЇ — з @@ бо це Razor === */
     @@keyframes pulse-green {
-        0% {
-            box-shadow: 0 0 10px #00ff0088;
+        0%, 100% {
+            box-shadow: 0 0 15px #00ff0088;
         }
 
         50% {
-            box-shadow: 0 0 25px #00ff00cc;
-        }
-
-        100% {
-            box-shadow: 0 0 10px #00ff0088;
+            box-shadow: 0 0 30px #00ff00ee;
+            transform: scale(1.15);
         }
     }
 
     @@keyframes pulse-red {
-        0% {
-            box-shadow: 0 0 10px #ff000088;
+        0%, 100% {
+            box-shadow: 0 0 15px #ff000088;
         }
 
         50% {
-            box-shadow: 0 0 25px #ff0000cc;
-        }
-
-        100% {
-            box-shadow: 0 0 10px #ff000088;
+            box-shadow: 0 0 30px #ff0000ee;
+            transform: scale(1.15);
         }
     }
 </style>
