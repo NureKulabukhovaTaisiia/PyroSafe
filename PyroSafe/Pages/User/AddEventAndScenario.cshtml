@@ -245,17 +245,31 @@
 </script>
 
 <style>
-    .event-meta {
-        margin-top: 10px;
-        font-size: 13px;
-        color: #88dddd;
+    /* === БАЗОВІ СТИЛІ КАРТОК === */
+    .items-container {
+        max-height: 70vh;
+        overflow-y: auto;
+        padding-right: 8px;
     }
 
-        .event-meta small {
-            display: block;
-            margin: 4px 0;
+    .item-card {
+        background: rgba(10, 25, 49, 0.85);
+        border-radius: 12px;
+        padding: 16px;
+        margin: 12px 0;
+        border-left: 6px solid transparent;
+        backdrop-filter: blur(12px);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+        transition: all 0.4s ease;
+        position: relative;
+    }
+
+        .item-card:hover {
+            transform: translateY(-6px);
+            box-shadow: 0 12px 40px rgba(0, 191, 255, 0.6);
         }
 
+    /* === КОЛЬОРИ ЗА ТЯЖКІСТЮ === */
     .severity-info {
         border-left-color: #00ffff;
     }
@@ -266,58 +280,154 @@
 
     .severity-critical {
         border-left-color: #ff0066;
+        animation: pulse-red 2s infinite;
     }
 
     .resolved {
-        opacity: 0.8;
-        border-left-color: #00ff00 !important;
+        opacity: 0.75;
+        border-left-color: #00ff88 !important;
+        background: linear-gradient(90deg, rgba(0, 255, 136, 0.1), transparent) !important;
     }
 
-    .severity-badge {
-        background: rgba(255,255,255,0.15);
-        padding: 4px 10px;
-        border-radius: 12px;
-        font-size: 12px;
+    /* === ЗАГОЛОВОК КАРТКИ === */
+    .item-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 8px;
     }
 
-    .description {
-        margin: 8px 0;
-        color: #ccc;
-    }
-
-    .item-card {
-        position: relative;
-        transition: all 0.3s;
-    }
-
-        .item-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 0 25px rgba(0,191,255,0.5);
+        .item-header strong {
+            font-size: 1.25em;
+            color: #00ffff;
         }
 
-    .btn-delete:hover {
+    .severity-badge {
+        background: rgba(255, 255, 255, 0.2);
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.85em;
+        font-weight: bold;
+    }
+
+    .status-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        display: inline-block;
         background: #ff5555;
     }
 
-    @@keyframes pulse-green {
-        0%, 100% {
-            box-shadow: 0 0 15px #00ff0088;
+        .status-dot.active {
+            background: #00ff88;
+            box-shadow: 0 0 15px #00ff88;
+            animation: pulse-green 2s infinite;
         }
 
-        50% {
-            box-shadow: 0 0 35px #00ff00ee;
-            transform: scale(1.3);
+        .status-dot.inactive {
+            background: #666;
         }
+
+    .description {
+        margin: 10px 0;
+        color: #cccccc;
+        font-style: italic;
     }
 
-    @@keyframes pulse-red {
-        0%, 100% {
-            box-shadow: 0 0 15px #ff000088;
+    .event-meta {
+        margin-top: 12px;
+        font-size: 0.9em;
+        color: #88dddd;
+    }
+
+        .event-meta small {
+            display: block;
+            margin: 3px 0;
         }
 
-        50% {
-            box-shadow: 0 0 35px #ff0000ee;
-            transform: scale(1.3);
+    /* === КНОПКА ВИДАЛЕННЯ === */
+    .btn-delete {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: rgba(255, 85, 85, 0.2);
+        border: 1px solid #ff5555;
+        color: #ff8888;
+        padding: 6px 10px;
+        border-radius: 6px;
+        font-size: 0.8em;
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+
+        .btn-delete:hover {
+            background: #ff5555;
+            color: white;
+            transform: scale(1.1);
         }
+
+    /* === АНІМАЦІЇ === */
+    @keyframes pulse-green {
+        0%, 100%
+
+    {
+        box-shadow: 0 0 15px #00ff0088;
+    }
+
+    50% {
+        box-shadow: 0 0 35px #00ff00ee;
+    }
+
+    }
+
+    @keyframes pulse-red {
+        0%, 100%
+
+    {
+        box-shadow: 0 0 15px #ff000088;
+    }
+
+    50% {
+        box-shadow: 0 0 35px #ff0000ee;
+    }
+
+    }
+
+    /* === ПРІОРИТЕТИ СЦЕНАРІЇВ === */
+    .priority-low {
+        background: #444;
+    }
+
+    .priority-medium {
+        background: #0066cc;
+    }
+
+    .priority-high {
+        background: #ffaa00;
+        color: black;
+    }
+
+    .priority-critical {
+        background: #ff0066;
+        color: white;
+        animation: pulse-red 3s infinite;
+    }
+
+    .priority-badge {
+        padding: 3px 8px;
+        border-radius: 6px;
+        font-size: 0.8em;
+        margin-left: 8px;
+    }
+
+    /* === СЦЕНАРІЇ АКТИВНІ/НЕАКТИВНІ === */
+    .active {
+        border-left-color: #00ff88;
+    }
+
+    .inactive {
+        border-left-color: #666;
+        opacity: 0.6;
     }
 </style>
