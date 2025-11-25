@@ -7,16 +7,15 @@ using System.Threading.Tasks;
 // Шлях API: /api/sensors
 [Route("api/[controller]")]
 [ApiController]
-public class SensorController : ControllerBase
+public class SensorsController : ControllerBase  // ← Правильна назва!
 {
     private readonly AppDbContext _context;
 
-    public SensorController(AppDbContext context)
+    public SensorsController(AppDbContext context)
     {
         _context = context;
     }
 
-    // GET /api/sensors
     [HttpGet]
     public async Task<ActionResult<IEnumerable<SensorReadDto>>> GetSensors()
     {
@@ -27,7 +26,7 @@ public class SensorController : ControllerBase
                 SensorName = s.SensorName,
                 SensorValue = s.SensorValue,
                 SensorType = s.SensorType,
-                Status = s.Status,
+                Status = s.Status ?? "Active",
                 ZoneID = s.ZoneID
             })
             .ToListAsync();
@@ -35,67 +34,29 @@ public class SensorController : ControllerBase
         return Ok(sensors);
     }
 
-    // GET /api/sensors/{id}
-    [HttpGet("{id}")]
-    public async Task<ActionResult<SensorReadDto>> GetSensor(int id)
-    {
-        var sensor = await _context.Sensors
-            .Where(s => s.ID == id)
-            .Select(s => new SensorReadDto
-            {
-                ID = s.ID,
-                SensorName = s.SensorName,
-                SensorValue = s.SensorValue,
-                SensorType = s.SensorType,
-                Status = s.Status,
-                ZoneID = s.ZoneID
-            })
-            .FirstOrDefaultAsync();
-
-        if (sensor == null)
-            return NotFound();
-
-        return Ok(sensor);
-    }
-
-
-
-    // --------------- POST /api/sensors ---------------
     [HttpPost]
-    public async Task<ActionResult<SensorReadDto>> CreateSensor([FromBody] SensorCreateDto sensorDto)
+    public async Task<ActionResult<SensorReadDto>> CreateSensor([FromBody] SensorCreateDto dto)
     {
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
 
-        var zone = await _context.Zones.FindAsync(sensorDto.ZoneID);
-        if (zone == null)
-            return BadRequest(new { message = "Zone not found" });
-
-        // Перевірка SensorValue і Status, якщо потрібно
-        string status = string.IsNullOrEmpty(sensorDto.Status) ? "OK" : sensorDto.Status;
-        string value = string.IsNullOrEmpty(sensorDto.SensorValue) ? "0" : sensorDto.SensorValue;
+        var zoneExists = await _context.Zones.AnyAsync(z => z.ID == dto.ZoneID);
+        if (!zoneExists)
+            return BadRequest(new { message = "Зона з таким ID не існує" });
 
         var sensor = new Sensor
         {
-            SensorName = sensorDto.SensorName,
-            SensorValue = value,
-            SensorType = sensorDto.SensorType,
-            ZoneID = sensorDto.ZoneID,
-            Status = status
+            SensorName = dto.SensorName,
+            SensorValue = dto.SensorValue ?? "0",
+            SensorType = dto.SensorType,
+            Status = dto.Status ?? "Active",
+            ZoneID = dto.ZoneID
         };
 
         _context.Sensors.Add(sensor);
+        await _context.SaveChangesAsync();
 
-        try
-        {
-            await _context.SaveChangesAsync();
-        }
-        catch (Exception ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-
-        var resultDto = new SensorReadDto
+        var readDto = new SensorReadDto
         {
             ID = sensor.ID,
             SensorName = sensor.SensorName,
@@ -105,8 +66,26 @@ public class SensorController : ControllerBase
             ZoneID = sensor.ZoneID
         };
 
-        return CreatedAtAction(nameof(GetSensor), new { id = sensor.ID }, resultDto);
+        return CreatedAtAction(nameof(GetSensor), new { id = sensor.ID }, readDto);
     }
+
+    [HttpGet("{id}")]
+    public async Task<ActionResult<SensorReadDto>> GetSensor(int id)
+    {
+        var sensor = await _context.Sensors.FindAsync(id);
+        if (sensor == null) return NotFound();
+
+        return Ok(new SensorReadDto
+        {
+            ID = sensor.ID,
+            SensorName = sensor.SensorName,
+            SensorValue = sensor.SensorValue,
+            SensorType = sensor.SensorType,
+            Status = sensor.Status,
+            ZoneID = sensor.ZoneID
+        });
+    }
+
 
     // --------------- PUT /api/sensors/{id} ---------------
     [HttpPut("{id}")]
