@@ -1,21 +1,18 @@
-using Microsoft.AspNetCore.Mvc.RazorPages;
+// Pages/Account/Logout.cshtml.cs
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace PyroSafe.Pages.Account
 {
     public class LogoutModel : PageModel
     {
-        public async Task OnGetAsync()
+        public async Task<IActionResult> OnGetAsync()
         {
-            // ќчищаЇмо сес≥ю
             HttpContext.Session.Clear();
-
-            // якщо використовуЇш куки-автентиф≥кац≥ю (рекомендуЇтьс€!) Ч теж виходимо
             await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-
-            // ¬ажливо: очищаЇмо саме сес≥йну куку
-            Response.Cookies.Delete(".AspNetCore.Session");
+            return Redirect("/Account/Login");
         }
     }
 }

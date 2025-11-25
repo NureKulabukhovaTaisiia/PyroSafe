@@ -5,11 +5,9 @@
 
 }
 <div class="user-menu">
-    <span class="username" onclick="toggleDropdown()">@Model.Username ⬇</span>
-    <div class="dropdown-content">
-        <a href="/Account/Logout" style="color: #00bfff; text-decoration: none; padding: 10px; display: block;">
-            Вийти
-        </a>
+    <span class="username" onclick="toggleDropdown()">@Model.Username ↓</span>
+    <div id="dropdown" class="dropdown-content">
+        <a href="/Account/Logout" class="logout-link">Вийти</a>
     </div>
 </div>
 
@@ -69,6 +67,21 @@
         const dropdown = document.getElementById('dropdown');
         dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
     }
+
+    function toggleDropdown() {
+        const dropdown = document.getElementById('dropdown');
+        dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
+    }
+
+    // Закриваємо dropdown при кліку поза ним
+    window.addEventListener('click', function(e) {
+        if (!e.target.matches('.username')) {
+            const dropdown = document.getElementById('dropdown');
+            if (dropdown.style.display === 'block') {
+                dropdown.style.display = 'none';
+            }
+        }
+    });
 </script>
 
 <style>
