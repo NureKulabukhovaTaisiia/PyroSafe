@@ -2,8 +2,8 @@
 @model PyroSafe.Pages.User.HomeModel
 @{
     ViewData["Title"] = "Панель охоронця";
-
 }
+
 <div class="user-menu">
     <span class="username" onclick="toggleDropdown()">@Model.Username ↓</span>
     <div id="dropdown" class="dropdown-content">
@@ -11,86 +11,106 @@
     </div>
 </div>
 
-
 <div class="dashboard-wrapper">
     <h1 class="dashboard-title">Панель охоронця PyroSafe</h1>
 
     <div class="actions">
         <button onclick="alert('Створити звіт')" class="btn-action">Створити звіт</button>
         <button onclick="alert('Екстренне сповіщення')" class="btn-action">Екстренне сповіщення</button>
-        <button class="btn-action" onclick="location.href='/User/AddZoneSensor'">
-            Додати Сенсор та зону
-        </button>
+        <button class="btn-action" onclick="location.href='/User/AddZoneSensor'">Додати сенсор та зону</button>
         <button onclick="alert('Створити сценарій/івент')" class="btn-action">Створити сценарій/івент</button>
     </div>
 
-    <div id="zonesContainer"></div>
+    <div id="zonesContainer" class="zones-grid">
+        <!-- Тут динамічно з’являться зони -->
+        <div class="loading">Завантаження зон та сенсорів...</div>
+    </div>
 </div>
 
 <script>
-    function logout() {
-        fetch('/Account/Logout', { method: 'POST' })
-            .then(() => {
-                window.location.href = '/Account/Register'; // або /Account/Login
-            })
-            .catch(err => console.error(err));
-    }
-    async function loadZones() {
-        const zonesResponse = await fetch('/api/zones');
-        const zones = await zonesResponse.json();
+    async function loadZonesAndSensors() {
+        try {
+            const [zonesRes, sensorsRes] = await Promise.all([
+                fetch('/api/zones'),
+                fetch('/api/sensors')
+            ]);
 
-        const sensorsResponse = await fetch('/api/sensors');
-        const sensors = await sensorsResponse.json();
+            if (!zonesRes.ok || !sensorsRes.ok) throw new Error('Не вдалося завантажити дані');
 
-        const container = document.getElementById('zonesContainer');
-        container.innerHTML = '';
+            const zones = await zonesRes.json();
+            const sensors = await sensorsRes.json();
 
-        zones.forEach(zone => {
-            const zoneDiv = document.createElement('div');
-            zoneDiv.classList.add('zone');
+            const container = document.getElementById('zonesContainer');
+            container.innerHTML = ''; // очищаємо "Завантаження..."
 
-            zoneDiv.innerHTML = `
-                <h2>Зона: ${zone.ZoneName} (Поверх: ${zone.Floor}, Площа: ${zone.Area} м²)</h2>
-                <ul>
-                    ${sensors.filter(s => s.ZoneID === zone.ID)
-                              .map(s => `<li>${s.SensorName} - Статус: ${s.Status}</li>`).join('')}
-                </ul>
-            `;
-
-            container.appendChild(zoneDiv);
-        });
-    }
-
-    window.addEventListener('DOMContentLoaded', loadZones);
-
-    function toggleDropdown() {
-        const dropdown = document.getElementById('dropdown');
-        dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
-    }
-
-    function toggleDropdown() {
-        const dropdown = document.getElementById('dropdown');
-        dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
-    }
-
-    // Закриваємо dropdown при кліку поза ним
-    window.addEventListener('click', function(e) {
-        if (!e.target.matches('.username')) {
-            const dropdown = document.getElementById('dropdown');
-            if (dropdown.style.display === 'block') {
-                dropdown.style.display = 'none';
+            if (zones.length === 0) {
+                container.innerHTML = '<p style="text-align:center; color:#00bfff; font-size:18px;">Немає створених зон</p>';
+                return;
             }
+
+            zones.forEach(zone => {
+                const zoneSensors = sensors.filter(s => s.ZoneID === zone.ID);
+
+                const zoneCard = document.createElement('div');
+                zoneCard.className = 'zone-card';
+
+                let sensorsHtml = '';
+                if (zoneSensors.length === 0) {
+                    sensorsHtml = '<p class="no-sensors">Сенсорів немає</p>';
+                } else {
+                    sensorsHtml = zoneSensors.map(s => `
+                        <div class="sensor-item ${s.Status?.toLowerCase() === 'active' ? 'active' : 'inactive'}">
+                            <div class="sensor-header">
+                                <span class="status-dot"></span>
+                                <strong>${s.SensorName}</strong>
+                                <span class="sensor-type">${s.SensorType}</span>
+                            </div>
+                            <div class="sensor-value">${s.SensorValue || '—'}</div>
+                        </div>
+                    `).join('');
+                }
+
+                zoneCard.innerHTML = `
+                    <h2>
+                        ${zone.ZoneName}
+                        <small>(Поверх ${zone.Floor} • ${zone.Area} м²)</small>
+                    </h2>
+                    <div class="sensors-list">
+                        ${sensorsHtml}
+                    </div>
+                `;
+
+                container.appendChild(zoneCard);
+            });
+        } catch (err) {
+            document.getElementById('zonesContainer').innerHTML =
+                `<p style="color:#ff5555; text-align:center;">Помилка: ${err.message}</p>`;
+        }
+    }
+
+    // Dropdown
+    function toggleDropdown() {
+        const dropdown = document.getElementById('dropdown');
+        dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
+    }
+    window.addEventListener('click', function(e) {
+        if (!e.target.matches('.username') && !e.target.closest('.username')) {
+            document.getElementById('dropdown').style.display = 'none';
         }
     });
+
+    // Завантажуємо при відкритті сторінки
+    document.addEventListener('DOMContentLoaded', loadZonesAndSensors);
 </script>
 
 <style>
     body {
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        font-family: 'Segoe UI', sans-serif;
         background: linear-gradient(135deg, #0a0a0a, #0a1a2e);
         color: #fff;
         margin: 0;
         padding: 20px;
+        min-height: 100vh;
     }
 
     .user-menu {
@@ -102,40 +122,41 @@
         color: #00bfff;
         cursor: pointer;
         text-shadow: 0 0 8px #00bfff;
+        user-select: none;
     }
 
     .dropdown-content {
         display: none;
         position: absolute;
         right: 0;
-        background-color: #0d0d0d;
+        background: #0d0d0d;
         min-width: 120px;
         border: 1px solid #00bfff;
-        border-radius: 6px;
-        margin-top: 5px;
-        text-align: center;
-        z-index: 100;
+        border-radius: 8px;
+        margin-top: 8px;
+        box-shadow: 0 0 15px rgba(0,191,255,0.4);
+        z-index: 1000;
     }
 
-    .logout-btn {
-        background: none;
-        border: none;
+    .logout-link {
+        display: block;
+        padding: 12px 16px;
         color: #00bfff;
+        text-decoration: none;
         font-weight: 600;
-        cursor: pointer;
-        padding: 5px 10px;
     }
 
-    .dashboard-wrapper {
-        max-width: 1200px;
-        margin: 0 auto;
-        text-align: center;
-    }
+        .logout-link:hover {
+            background: #00bfff;
+            color: #0a0a0a;
+            border-radius: 6px;
+        }
 
     .dashboard-title {
         font-size: 36px;
         color: #00bfff;
-        margin-bottom: 30px;
+        text-align: center;
+        margin: 20px 0 40px;
         text-shadow: 0 0 10px #00bfff;
     }
 
@@ -144,45 +165,141 @@
         justify-content: center;
         flex-wrap: wrap;
         gap: 15px;
-        margin-bottom: 40px;
+        margin-bottom: 50px;
     }
 
     .btn-action {
-        padding: 15px 25px;
-        background-color: #00bfff;
+        padding: 15px 30px;
+        background: #00bfff;
         color: #0a0a0a;
         border: none;
         border-radius: 8px;
-        cursor: pointer;
         font-weight: 600;
-        transition: background-color 0.3s, transform 0.2s;
+        cursor: pointer;
+        transition: all 0.3s;
     }
 
         .btn-action:hover {
-            background-color: #0099cc;
-            transform: scale(1.05);
+            background: #0099cc;
+            transform: translateY(-3px);
         }
 
-    .zone {
-        background-color: #0d0d0d;
-        border-radius: 12px;
-        padding: 20px;
-        margin-bottom: 25px;
-        box-shadow: 0 0 15px rgba(0, 191, 255, 0.5);
-        text-align: left;
+    .zones-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+        gap: 25px;
+        max-width: 1400px;
+        margin: 0 auto;
     }
 
-        .zone h2 {
+    .zone-card {
+        background: #0d0d0d;
+        border-radius: 16px;
+        padding: 20px;
+        box-shadow: 0 0 20px rgba(0,191,255,0.3);
+        border: 1px solid rgba(0,191,255,0.2);
+        transition: transform 0.3s;
+    }
+
+        .zone-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 0 30px rgba(0,191,255,0.6);
+        }
+
+        .zone-card h2 {
+            margin: 0 0 15px 0;
             color: #00bfff;
+            font-size: 22px;
         }
 
-        .zone ul {
-            list-style: none;
-            padding-left: 0;
+            .zone-card h2 small {
+                font-size: 14px;
+                color: #88dddd;
+                font-weight: normal;
+            }
+
+    .sensors-list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .sensor-item {
+        background: rgba(0, 191, 255, 0.08);
+        border-radius: 10px;
+        padding: 12px;
+        border-left: 4px solid #00bfff;
+    }
+
+        .sensor-item.inactive {
+            opacity: 0.6;
+            border-left-color: #ff5555;
         }
 
-        .zone li {
-            padding: 5px 0;
-            border-bottom: 1px solid #00bfff33;
-        }
+    .sensor-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 6px;
+    }
+
+    .status-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: #ff5555;
+        box-shadow: 0 0 10px #ff5555;
+    }
+
+    .sensor-item.active .status-dot {
+        background: #00ff00;
+        box-shadow: 0 0 15px #00ff0088;
+        animation: pulse 2s infinite;
+    }
+
+    .sensor-type {
+        margin-left: auto;
+        font-size: 12px;
+        color: #88dddd;
+        background: rgba(0,191,255,0.2);
+        padding: 2px 8px;
+        border-radius: 4px;
+    }
+
+    .sensor-value {
+        font-size: 18px;
+        font-weight: bold;
+        color: #00ffcc;
+    }
+
+    .no-sensors {
+        color: #888;
+        font-style: italic;
+        text-align: center;
+        padding: 20px;
+    }
+
+    .loading {
+        text-align: center;
+        font-size: 18px;
+        color: #00bfff;
+        padding: 40px;
+    }
+
+    @keyframes pulse {
+        0%
+
+    {
+        box-shadow: 0 0 15px #00ff0088;
+    }
+
+    50% {
+        box-shadow: 0 0 25px #00ff00cc;
+    }
+
+    100% {
+        box-shadow: 0 0 15px #00ff0088;
+    }
+
+    }
 </style>
