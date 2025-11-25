@@ -27,22 +27,26 @@ public class EventController : ControllerBase
         var events = await _context.Events
             .Include(e => e.Sensor)
             .Include(e => e.Scenario)
+            .Include(e => e.ResolvedUser) // підтягуємо ім’я того, хто вирішив
             .OrderByDescending(e => e.CreatedAt)
             .ToListAsync();
 
         var result = events.Select(e => new
         {
             id = e.ID,
-            sensorID = e.SensorID,
+            SensorID = e.SensorID,
             sensorName = e.Sensor != null ? $"{e.Sensor.SensorName} ({e.Sensor.SensorType})" : "Невідомий сенсор",
-            scenarioID = e.ScenarioID,
+            ScenarioID = e.ScenarioID,
             scenarioName = e.Scenario?.ScenarioType ?? "—",
-            description = e.Description ?? "Без опису",
-            severity = e.Severity ?? "Info",
-            status = e.Status ?? "New",
+            Description = e.Description ?? "Без опису",
+            Severity = e.Severity ?? "Info",
+            Status = e.Status ?? "New",
             createdAt = e.CreatedAt,
             createdBy = CurrentUserId,
-            createdByName = CurrentUserName
+            createdByName = CurrentUserName,
+            resolvedAt = e.ResolvedAt,
+            resolvedBy = e.ResolvedBy,
+            resolvedByName = e.ResolvedUser != null ? e.ResolvedUser.Username : null
         });
 
         return Ok(result);
@@ -52,53 +56,88 @@ public class EventController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> CreateEvent([FromBody] EventCreateDto dto)
     {
-        if (dto == null || dto.sensorID <= 0)
+        if (dto == null || dto.SensorID <= 0)
             return BadRequest("Оберіть сенсор");
 
-        if (string.IsNullOrWhiteSpace(dto.description))
+        if (string.IsNullOrWhiteSpace(dto.Description))
             return BadRequest("Введіть опис");
 
-        var sensorExists = await _context.Sensors.AnyAsync(s => s.ID == dto.sensorID);
+        var sensorExists = await _context.Sensors.AnyAsync(s => s.ID == dto.SensorID);
         if (!sensorExists)
             return BadRequest("Сенсор не знайдено");
 
         var ev = new Event
         {
-            SensorID = dto.sensorID,
-            ScenarioID = dto.scenarioID,
-            Description = dto.description.Trim(),
-            Severity = dto.severity?.Trim() ?? "Info",
-            Status = dto.status?.Trim() ?? "New",
+            SensorID = dto.SensorID,
+            ScenarioID = dto.ScenarioID,
+            Description = dto.Description.Trim(),
+            Severity = dto.Severity?.Trim() ?? "Info",
+            Status = dto.Status?.Trim() ?? "New",
             EventTime = DateTime.Now,
-            CreatedAt = DateTime.Now   // ← використовуємо твоє поле!
+            CreatedAt = DateTime.Now
+            // ResolvedAt і ResolvedBy залишаються null — івент ще не вирішений
         };
 
         _context.Events.Add(ev);
         await _context.SaveChangesAsync();
 
         var sensor = await _context.Sensors.FirstOrDefaultAsync(s => s.ID == ev.SensorID);
-        var scenario = dto.scenarioID != null
-            ? await _context.Scenarios.FirstOrDefaultAsync(s => s.ID == dto.scenarioID)
+        var scenario = dto.ScenarioID != null
+            ? await _context.Scenarios.FirstOrDefaultAsync(s => s.ID == dto.ScenarioID)
             : null;
 
         var result = new
         {
             id = ev.ID,
-            sensorID = ev.SensorID,
+            SensorID = ev.SensorID,
             sensorName = sensor != null ? $"{sensor.SensorName} ({sensor.SensorType})" : "Невідомий",
-            scenarioID = ev.ScenarioID,
+            ScenarioID = ev.ScenarioID,
             scenarioName = scenario?.ScenarioType ?? "—",
-            description = ev.Description,
-            severity = ev.Severity,
-            status = ev.Status,
+            Description = ev.Description,
+            Severity = ev.Severity,
+            Status = ev.Status,
             createdAt = ev.CreatedAt,
             createdBy = CurrentUserId,
-            createdByName = CurrentUserName
+            createdByName = CurrentUserName,
+            resolvedAt = ev.ResolvedAt,
+            resolvedBy = ev.ResolvedBy,
+            resolvedByName = (string?)null
         };
 
         return CreatedAtAction(nameof(GetEvent), new { id = ev.ID }, result);
     }
 
+    // НОВИЙ МЕТОД: Позначити івент як вирішений
+    [HttpPatch("{id}/resolve")]
+    public async Task<IActionResult> ResolveEvent(int id)
+    {
+        var ev = await _context.Events.FindAsync(id);
+        if (ev == null)
+            return NotFound();
+
+        if (ev.Status == "Resolved")
+            return BadRequest("Івент вже вирішений");
+
+        ev.Status = "Resolved";
+        ev.ResolvedAt = DateTime.Now;
+        ev.ResolvedBy = CurrentUserId;
+
+        await _context.SaveChangesAsync();
+
+        // Повертаємо оновлений івент
+        var resolvedUser = await _context.Users.FindAsync(CurrentUserId);
+
+        return Ok(new
+        {
+            message = "Івент успішно позначено як вирішений",
+            eventId = ev.ID,
+            resolvedAt = ev.ResolvedAt,
+            resolvedBy = ev.ResolvedBy,
+            resolvedByName = resolvedUser?.Username ?? CurrentUserName
+        });
+    }
+
+    // DELETE: api/events/{id}
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteEvent(int id)
     {
@@ -110,12 +149,14 @@ public class EventController : ControllerBase
         return NoContent();
     }
 
+    // GET: api/events/{id}
     [HttpGet("{id}")]
     public async Task<IActionResult> GetEvent(int id)
     {
         var ev = await _context.Events
             .Include(e => e.Sensor)
             .Include(e => e.Scenario)
+            .Include(e => e.ResolvedUser)
             .FirstOrDefaultAsync(e => e.ID == id);
 
         if (ev == null) return NotFound();
@@ -123,26 +164,28 @@ public class EventController : ControllerBase
         return Ok(new
         {
             id = ev.ID,
-            sensorID = ev.SensorID,
+            SensorID = ev.SensorID,
             sensorName = ev.Sensor != null ? $"{ev.Sensor.SensorName} ({ev.Sensor.SensorType})" : "Невідомий",
-            scenarioID = ev.ScenarioID,
+            ScenarioID = ev.ScenarioID,
             scenarioName = ev.Scenario?.ScenarioType ?? "—",
-            description = ev.Description,
-            severity = ev.Severity,
-            status = ev.Status,
+            Description = ev.Description,
+            Severity = ev.Severity,
+            Status = ev.Status,
             createdAt = ev.CreatedAt,
             createdBy = CurrentUserId,
-            createdByName = CurrentUserName
+            createdByName = CurrentUserName,
+            resolvedAt = ev.ResolvedAt,
+            resolvedBy = ev.ResolvedBy,
+            resolvedByName = ev.ResolvedUser?.Username
         });
     }
 }
 
-// DTO — camelCase
 public class EventCreateDto
 {
-    public int sensorID { get; set; }
-    public int? scenarioID { get; set; }
-    public string description { get; set; } = "";
-    public string? severity { get; set; }
-    public string? status { get; set; }
+    public int SensorID { get; set; }
+    public int? ScenarioID { get; set; }
+    public string Description { get; set; } = "";
+    public string? Severity { get; set; }
+    public string? Status { get; set; }
 }

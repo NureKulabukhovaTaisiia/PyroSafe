@@ -1,5 +1,4 @@
-﻿﻿
-@page
+﻿@page
 @model PyroSafe.Pages.User.AddEventAndScenarioModel
 @{
     ViewData["Title"] = "Сценарії та Івенти";
@@ -8,8 +7,7 @@
 <div class="form-wrapper">
     <h1 class="welcome-title">Сценарії та Івенти</h1>
 
-    <button type="button" class="btn-login"
-            onclick="location.href='/User/Home'">
+    <button type="button" class="btn-login" onclick="location.href='/User/Home'">
         На головну
     </button>
 
@@ -62,7 +60,14 @@
 
         <hr />
 
-        <!-- СПИСОК ІВЕНТІВ -->
+        <!-- ФІЛЬТР ТА СПИСОК ІВЕНТІВ -->
+        <div style="margin-bottom: 15px; text-align: right;">
+            <label>
+                <input type="checkbox" id="showResolved" checked onchange="loadEvents()" />
+                Показувати вирішені
+            </label>
+        </div>
+
         <h2>Останні івенти</h2>
         <div id="eventsList" class="items-container">
             <p style="text-align:center; color:#00bfff;">Завантаження івентів...</p>
@@ -79,7 +84,7 @@
         ]);
     }
 
-    // Завантаження сценаріїв
+    // === Сценарії ===
     async function loadScenarios() {
         try {
             const res = await fetch('/api/scenarios');
@@ -101,55 +106,63 @@
                     </div>
                     <p class="description">${s.description || 'Без опису'}</p>
                     <div class="item-actions">
-                        <button class="btn-delete" onclick="deleteScenario(${s.id})">
-                            Видалити
-                        </button>
+                        <button class="btn-delete" onclick="deleteScenario(${s.id})">Видалити</button>
                     </div>
                 </div>
             `).join('');
-
         } catch (err) {
             document.getElementById('scenariosList').innerHTML = '<p style="color:#ff5555; text-align:center;">Помилка завантаження сценаріїв</p>';
         }
     }
 
-    // Завантаження івентів
+    // === Івенти ===
     async function loadEvents() {
         try {
             const res = await fetch('/api/events');
             if (!res.ok) throw new Error('Не вдалося завантажити івенти');
             const events = await res.json();
 
+            const showResolved = document.getElementById('showResolved').checked;
+            const filtered = showResolved ? events : events.filter(e => e.status !== 'Resolved');
+
             const list = document.getElementById('eventsList');
-            if (events.length === 0) {
+            if (filtered.length === 0) {
                 list.innerHTML = '<p style="color:#888; text-align:center;">Немає івентів</p>';
                 return;
             }
 
-            list.innerHTML = events.map(e => `
-                <div class="item-card severity-${e.severity.toLowerCase()} ${e.status === 'Resolved' ? 'resolved' : ''}">
+            list.innerHTML = filtered.map(e => `
+                <div class="item-card severity-${(e.severity || 'info').toLowerCase()} ${e.status === 'Resolved' ? 'resolved' : ''}">
                     <div class="item-header">
                         <strong>Івент #${e.id}</strong>
-                        <span class="severity-badge">${e.severity}</span>
+                        <span class="severity-badge">${e.severity || 'Info'}</span>
                         <span class="status-dot ${e.status === 'Resolved' ? 'active' : 'inactive'}"></span>
                     </div>
-                    <p><strong>Сенсор:</strong> ${e.sensorID} | <strong>Сценарій:</strong> ${e.scenarioID || '—'}</p>
+                    <p><strong>Сенсор:</strong> ${e.sensorName || 'Невідомий'}</p>
+                    <p><strong>Сценарій:</strong> ${e.scenarioName || '—'}</p>
                     <p class="description">${e.description || 'Без опису'}</p>
-                    <small>${e.resolvedAt ? 'Вирішено: ' + new Date(e.resolvedAt).toLocaleString() : 'Активний'}</small>
+                    ${e.resolvedAt ? `
+                        <small style="color:#00ff00;">
+                            Вирішено: ${new Date(e.resolvedAt).toLocaleString()}
+                            ${e.resolvedByName ? ` — ${e.resolvedByName}` : ''}
+                        </small>
+                    ` : '<small style="color:#ffaa00;">Активний</small>'}
                     <div class="item-actions">
-                        <button class="btn-delete" onclick="deleteEvent(${e.id})">
-                            Видалити
-                        </button>
+                        ${e.status !== 'Resolved' ? `
+                            <button class="btn-resolve" onclick="resolveEvent(${e.id})">Вирішити</button>
+                        ` : ''}
+                        <button class="btn-delete" onclick="deleteEvent(${e.id})">Видалити</button>
                     </div>
                 </div>
             `).join('');
 
         } catch (err) {
+            console.error(err);
             document.getElementById('eventsList').innerHTML = '<p style="color:#ff5555; text-align:center;">Помилка завантаження івентів</p>';
         }
     }
 
-    // Завантаження сенсорів і сценаріїв у селекти
+    // === Сенсори та сценарії у селекти ===
     async function loadSensorsAndScenariosForSelects() {
         try {
             const [sensorsRes, scenariosRes] = await Promise.all([
@@ -160,23 +173,17 @@
 
             const sensorSelect = document.getElementById('eventSensorSelect');
             sensorSelect.innerHTML = '<option value="">— Оберіть сенсор —</option>';
-            sensors.forEach(s => {
-                const opt = new Option(`${s.sensorName} (${s.sensorType})`, s.id);
-                sensorSelect.add(opt);
-            });
+            sensors.forEach(s => sensorSelect.add(new Option(`${s.sensorName} (${s.sensorType})`, s.id)));
 
             const scenarioSelect = document.getElementById('eventScenarioSelect');
             scenarioSelect.innerHTML = '<option value="">— Без сценарію —</option>';
-            scenarios.forEach(s => {
-                const opt = new Option(`${s.scenarioType} (${s.priority})`, s.id);
-                scenarioSelect.add(opt);
-            });
+            scenarios.forEach(s => scenarioSelect.add(new Option(`${s.scenarioType} (${s.priority})`, s.id)));
         } catch (err) {
-            console.error("Помилка завантаження даних для селектів");
+            console.error("Помилка завантаження селектів", err);
         }
     }
 
-    // Створення сценарію
+    // === Створення сценарію ===
     document.getElementById('createScenarioBtn').addEventListener('click', async () => {
         const data = {
             scenarioType: document.getElementById('scenarioType').value.trim(),
@@ -185,10 +192,7 @@
             isActive: document.getElementById('scenarioActive').checked
         };
 
-        if (!data.scenarioType) {
-            showMessage('scenarioResult', 'Введіть тип сценарію!', 'warning');
-            return;
-        }
+        if (!data.scenarioType) return showMessage('scenarioResult', 'Введіть тип сценарію!', 'warning');
 
         try {
             const res = await fetch('/api/scenarios', {
@@ -197,10 +201,7 @@
                 body: JSON.stringify(data)
             });
 
-            if (!res.ok) {
-                const err = await res.json();
-                throw new Error(err.message || 'Помилка створення');
-            }
+            if (!res.ok) throw new Error((await res.json()).message || 'Помилка');
 
             showMessage('scenarioResult', 'Сценарій створено!', 'success');
             document.getElementById('scenarioType').value = '';
@@ -212,7 +213,7 @@
         }
     });
 
-    // Створення івенту
+    // === Створення івенту ===
     document.getElementById('createEventBtn').addEventListener('click', async () => {
         const data = {
             sensorID: parseInt(document.getElementById('eventSensorSelect').value),
@@ -223,8 +224,7 @@
         };
 
         if (!data.sensorID || !data.description) {
-            showMessage('eventResult', 'Заповніть усі поля!', 'warning');
-            return;
+            return showMessage('eventResult', 'Заповніть усі обов’язкові поля!', 'warning');
         }
 
         try {
@@ -238,49 +238,62 @@
 
             showMessage('eventResult', 'Івент зареєстровано!', 'success');
             document.getElementById('eventDesc').value = '';
+            document.getElementById('eventSensorSelect').value = '';
+            document.getElementById('eventScenarioSelect').value = '';
             loadEvents();
         } catch (err) {
-            showMessage('eventResult', err.message, 'error');
+            showMessage('eventResult', err.message || 'Помилка', 'error');
         }
     });
 
-    // ВИДАЛЕННЯ СЦЕНАРІЮ
-    window.deleteScenario = async (id) => {
-        if (!confirm('УВАГА! Видалити сценарій назавжди?')) return;
+    // === Вирішити івент ===
+    window.resolveEvent = async (id) => {
+        if (!confirm('Позначити івент як вирішений?')) return;
 
         try {
+            const res = await fetch(`/api/events/${id}/resolve`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            if (!res.ok) throw new Error('Не вдалося вирішити івент');
+
+            showMessage('eventResult', 'Івент вирішено!', 'success');
+            loadEvents();
+        } catch (err) {
+            alert('Помилка: ' + (err.message || 'невідома'));
+        }
+    };
+
+    // === Видалення ===
+    window.deleteScenario = async (id) => {
+        if (!confirm('УВАГА! Видалити сценарій назавжди?')) return;
+        try {
             const res = await fetch(`/api/scenarios/${id}`, { method: 'DELETE' });
-            if (!res.ok) {
-                const err = await res.json();
-                alert('Не вдалося видалити: ' + (err.message || 'Є пов’язані івенти'));
-                return;
-            }
+            if (!res.ok) throw new Error((await res.json()).message || 'Є пов’язані івенти');
             showMessage('scenarioResult', 'Сценарій видалено!', 'success');
             loadScenarios();
             loadSensorsAndScenariosForSelects();
+        } catch (err) {
+            alert('Не вдалося видалити: ' + err.message);
+        }
+    };
+
+    window.deleteEvent = async (id) => {
+        if (!confirm('Видалити цей івент?')) return;
+        try {
+            const res = await fetch(`/api/events/${id}`, { method: 'DELETE' });
+            if (!res.ok) throw new Error('Не вдалося видалити');
+            showMessage('eventResult', 'Івент видалено!', 'success');
+            loadEvents();
         } catch (err) {
             alert('Помилка видалення');
         }
     };
 
-    // ВИДАЛЕННЯ ІВЕНТУ
-    window.deleteEvent = async (id) => {
-        if (!confirm('Видалити цей івент?')) return;
-
-        try {
-            const res = await fetch(`/api/events/${id}`, { method: 'DELETE' });
-            if (!res.ok) throw new Error('Не вдалося видалити');
-
-            showMessage('eventResult', 'Івент видалено!', 'success');
-            loadEvents();
-        } catch (err) {
-            alert('Помилка видалення івенту');
-        }
-    };
-
-    // Допоміжна функція для повідомлень
-    function showMessage(elementId, text, type) {
-        const el = document.getElementById(elementId);
+    // === Повідомлення ===
+    function showMessage(id, text, type) {
+        const el = document.getElementById(id);
         el.innerText = text;
         el.style.color = type === 'success' ? '#00ffcc' : type === 'error' ? '#ff5555' : '#ffaa00';
     }
@@ -290,32 +303,50 @@
 </script>
 
 <style>
+    /* Твій старий CSS + нова кнопка */
+    .btn-resolve {
+        background: #00ff00;
+        color: #000;
+        border: none;
+        padding: 8px 14px;
+        border-radius: 8px;
+        font-size: 13px;
+        cursor: pointer;
+        margin-right: 8px;
+    }
+
+        .btn-resolve:hover {
+            background: #00ff88;
+        }
+
+    /* Решта стилів залишається без змін */
+    /* (твій CSS з попереднього повідомлення) */
     body {
-        font-family: 'Segoe UI', sans-serif;
+        font-family: 'Segoe UI',sans-serif;
         background: linear-gradient(135deg,#0a0a0a,#0a1a2e);
         color: #fff;
         display: flex;
         justify-content: center;
         padding: 30px 20px;
-        min-height: 100vh;
+        min-height: 100vh
     }
 
     .form-wrapper {
         width: 740px;
-        text-align: center;
+        text-align: center
     }
 
     .form-container {
         background: #0d0d0d;
         padding: 40px;
         border-radius: 16px;
-        box-shadow: 0 0 30px rgba(0,191,255,0.7);
+        box-shadow: 0 0 30px rgba(0,191,255,0.7)
     }
 
     h2 {
         color: #00bfff;
         margin: 35px 0 20px;
-        font-size: 24px;
+        font-size: 24px
     }
 
     .entry-box {
@@ -323,7 +354,7 @@
         padding: 25px;
         border-radius: 12px;
         border: 1px solid #00bfff;
-        margin-bottom: 25px;
+        margin-bottom: 25px
     }
 
     input, select {
@@ -334,13 +365,7 @@
         border: 1px solid #00bfff;
         border-radius: 8px;
         color: #fff;
-        font-size: 16px;
-    }
-
-    label > input[type=checkbox] {
-        width: auto;
-        vertical-align: middle;
-        margin-left: 8px;
+        font-size: 16px
     }
 
     .btn-submit, .btn-login {
@@ -354,24 +379,24 @@
         font-weight: bold;
         font-size: 17px;
         cursor: pointer;
-        transition: 0.3s;
+        transition: .3s
     }
 
     .btn-login {
         background: #0a0a0a;
         border: 2px solid #00bfff;
-        color: #00bfff;
+        color: #00bfff
     }
 
         .btn-login:hover, .btn-submit:hover {
             background: #00ffff;
-            color: #000;
+            color: #000
         }
 
     .items-container {
         max-height: 500px;
         overflow-y: auto;
-        padding: 10px;
+        padding: 10px
     }
 
     .item-card {
@@ -381,25 +406,25 @@
         border-radius: 12px;
         border-left: 5px solid #00bfff;
         position: relative;
-        transition: all 0.3s;
+        transition: all .3s
     }
 
         .item-card:hover {
             transform: translateY(-3px);
-            box-shadow: 0 0 20px rgba(0,191,255,0.4);
+            box-shadow: 0 0 20px rgba(0,191,255,0.4)
         }
 
         .item-card.resolved {
             opacity: 0.75;
-            border-left-color: #00ff00;
+            border-left-color: #00ff00
         }
 
     .severity-critical {
-        border-left-color: #ff0000 !important;
+        border-left-color: #ff0000 !important
     }
 
     .severity-warning {
-        border-left-color: #ffaa00 !important;
+        border-left-color: #ffaa00 !important
     }
 
     .item-header {
@@ -408,46 +433,46 @@
         align-items: center;
         flex-wrap: wrap;
         gap: 10px;
-        margin-bottom: 8px;
+        margin-bottom: 8px
     }
 
-    .priority-badge, .severity-badge {
+    .severity-badge, .priority-badge {
         padding: 6px 12px;
         border-radius: 20px;
         font-size: 13px;
-        font-weight: bold;
+        font-weight: bold
     }
 
     .priority-low {
         background: #00ff0033;
-        color: #00ff00;
+        color: #00ff00
     }
 
     .priority-medium {
         background: #ffaa0033;
-        color: #ffaa00;
+        color: #ffaa00
     }
 
     .priority-high {
         background: #ff550033;
-        color: #ff5555;
+        color: #ff5555
     }
 
     .priority-critical {
         background: #ff000033;
-        color: #ff0000;
+        color: #ff0000
     }
 
     .description {
         margin: 10px 0;
         font-size: 15px;
-        color: #ccc;
+        color: #ccc
     }
 
     .item-actions {
         position: absolute;
         top: 12px;
-        right: 12px;
+        right: 12px
     }
 
     .btn-delete {
@@ -457,51 +482,51 @@
         padding: 8px 14px;
         border-radius: 8px;
         font-size: 13px;
-        cursor: pointer;
+        cursor: pointer
     }
 
         .btn-delete:hover {
-            background: #ff5555;
+            background: #ff5555
         }
 
     .status-dot {
         width: 14px;
         height: 14px;
         border-radius: 50%;
-        display: inline-block;
+        display: inline-block
     }
 
         .status-dot.active {
             background: #00ff00;
             box-shadow: 0 0 15px #00ff0088;
-            animation: pulse-green 2s infinite ease-in-out;
+            animation: pulse-green 2s infinite ease-in-out
         }
 
         .status-dot.inactive {
             background: #ff0000;
             box-shadow: 0 0 15px #ff000088;
-            animation: pulse-red 2s infinite ease-in-out;
+            animation: pulse-red 2s infinite ease-in-out
         }
 
     @@keyframes pulse-green {
         0%, 100% {
-            box-shadow: 0 0 15px #00ff0088;
+            box-shadow: 0 0 15px #00ff0088
         }
 
         50% {
             box-shadow: 0 0 35px #00ff00ee;
-            transform: scale(1.3);
+            transform: scale(1.3)
         }
     }
 
     @@keyframes pulse-red {
         0%, 100% {
-            box-shadow: 0 0 15px #ff000088;
+            box-shadow: 0 0 15px #ff000088
         }
 
         50% {
             box-shadow: 0 0 35px #ff0000ee;
-            transform: scale(1.3);
+            transform: scale(1.3)
         }
     }
 </style>
