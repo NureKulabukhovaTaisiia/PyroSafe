@@ -34,7 +34,9 @@
                 fetch('/api/sensors')
             ]);
 
-            if (!zonesRes.ok || !sensorsRes.ok) throw new Error('Не вдалося завантажити дані');
+            if (!zonesRes.ok || !sensorsRes.ok) {
+                throw new Error(`Помилка: ${zonesRes.status} / ${sensorsRes.status}`);
+            }
 
             const zones = await zonesRes.json();
             const sensors = await sensorsRes.json();
@@ -47,7 +49,8 @@
             }
 
             zones.forEach(zone => {
-                const zoneSensors = sensors.filter(s => s.ZoneID === zone.ID);
+                const zoneSensors = sensors.filter(s => s.zoneID === zone.id);
+
                 const zoneCard = document.createElement('div');
                 zoneCard.className = 'zone-card';
 
@@ -56,15 +59,15 @@
                     sensorsHtml = '<p class="no-sensors">Сенсорів немає</p>';
                 } else {
                     sensorsHtml = zoneSensors.map(s => {
-                        const isActive = s.Status?.toLowerCase() === 'active';
+                        const isActive = s.status?.toLowerCase() === 'active';
                         return `
                             <div class="sensor-item ${isActive ? 'active' : 'inactive'}">
                                 <div class="sensor-header">
                                     <span class="status-dot"></span>
-                                    <strong>${s.SensorName}</strong>
-                                    <span class="sensor-type">${s.SensorType}</span>
+                                    <strong>${s.sensorName || 'Без назви'}</strong>
+                                    <span class="sensor-type">${s.sensorType || ''}</span>
                                 </div>
-                                <div class="sensor-value">${s.SensorValue || '—'}</div>
+                                <div class="sensor-value">${s.sensorValue || '—'}</div>
                             </div>
                         `;
                     }).join('');
@@ -72,18 +75,20 @@
 
                 zoneCard.innerHTML = `
                     <h2>
-                        ${zone.ZoneName}
-                        <small>(Поверх ${zone.Floor} • ${zone.Area} м²)</small>
+                        ${zone.zoneName || 'Зона без назви'}
+                        <small>(Поверх ${zone.floor ?? '?'} • ${zone.area ?? '?'} м²)</small>
                     </h2>
                     <div class="sensors-list">
                         ${sensorsHtml}
                     </div>
                 `;
+
                 container.appendChild(zoneCard);
             });
+
         } catch (err) {
             document.getElementById('zonesContainer').innerHTML =
-                `<p style="color:#ff5555; text-align:center;">Помилка: ${err.message}</p>`;
+                `<p style="color:#ff5555; text-align:center;">Помилка завантаження: ${err.message}</p>`;
         }
     }
 
@@ -100,7 +105,6 @@
 
     document.addEventListener('DOMContentLoaded', loadZonesAndSensors);
 </script>
-
 <style type="text/css">
     body {
         font-family: 'Segoe UI', sans-serif;
