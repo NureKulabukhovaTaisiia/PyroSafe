@@ -29,7 +29,20 @@ builder.Services.AddCors(options =>
 });
 
 // ===== Controllers & Razor Pages =====
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        // Головне — camelCase для всіх API-відповідей і вхідних даних
+        options.JsonSerializerOptions.PropertyNamingPolicy =
+            System.Text.Json.JsonNamingPolicy.CamelCase;
+
+        // Не відправляємо null-поля (чистіше виглядає)
+        options.JsonSerializerOptions.DefaultIgnoreCondition =
+            System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
+
+        // Додатково: щоб нормально читало camelCase з фронтенду
+        options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
+    });
 builder.Services.AddRazorPages();
 
 // ===== Session =====

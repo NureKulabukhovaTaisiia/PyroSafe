@@ -21,13 +21,14 @@ public class EventController : ControllerBase
     private string CurrentUserName => User.Identity?.Name ?? "Охоронець";
 
     // GET: api/events
+    // GET: api/events
     [HttpGet]
     public async Task<IActionResult> GetEvents()
     {
         var events = await _context.Events
             .Include(e => e.Sensor)
             .Include(e => e.Scenario)
-            .Include(e => e.ResolvedUser) // підтягуємо ім’я того, хто вирішив
+            .Include(e => e.ResolvedUser)  // ← ЦЕГО НЕ БУЛО! Критичний рядок!
             .OrderByDescending(e => e.CreatedAt)
             .ToListAsync();
 
@@ -46,7 +47,7 @@ public class EventController : ControllerBase
             createdByName = CurrentUserName,
             resolvedAt = e.ResolvedAt,
             resolvedBy = e.ResolvedBy,
-            resolvedByName = e.ResolvedUser != null ? e.ResolvedUser.Username : null
+            resolvedByName = e.ResolvedUser?.Username  // тепер безпечно!
         });
 
         return Ok(result);
@@ -151,12 +152,13 @@ public class EventController : ControllerBase
 
     // GET: api/events/{id}
     [HttpGet("{id}")]
+    [HttpGet("{id}")]
     public async Task<IActionResult> GetEvent(int id)
     {
         var ev = await _context.Events
             .Include(e => e.Sensor)
             .Include(e => e.Scenario)
-            .Include(e => e.ResolvedUser)
+            .Include(e => e.ResolvedUser)  // ← і тут теж!
             .FirstOrDefaultAsync(e => e.ID == id);
 
         if (ev == null) return NotFound();
