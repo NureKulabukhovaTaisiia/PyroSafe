@@ -5,7 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 
 // Шлях API: /api/scenarios
-[Route("api/[controller]")]
+[Route("api/[controller]s")]
 [ApiController]
 public class ScenarioController : ControllerBase
 {

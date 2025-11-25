@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-[Route("api/[controller]")]
+[Route("api/[controller]s")]
 [ApiController]
 public class EventController : ControllerBase
 {
