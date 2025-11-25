@@ -5,7 +5,7 @@
 }
 
 <div class="user-menu">
-    <span class="username" onclick="toggleDropdown()">@Model.Username ↓</span>
+    <span class="username" onclick="toggleDropdown()">@Model.Username</span>
     <div id="dropdown" class="dropdown-content">
         <a href="/Account/Logout" class="logout-link">Вийти</a>
     </div>
@@ -22,7 +22,6 @@
     </div>
 
     <div id="zonesContainer" class="zones-grid">
-        <!-- Тут динамічно з’являться зони -->
         <div class="loading">Завантаження зон та сенсорів...</div>
     </div>
 </div>
@@ -39,9 +38,8 @@
 
             const zones = await zonesRes.json();
             const sensors = await sensorsRes.json();
-
             const container = document.getElementById('zonesContainer');
-            container.innerHTML = ''; // очищаємо "Завантаження..."
+            container.innerHTML = '';
 
             if (zones.length === 0) {
                 container.innerHTML = '<p style="text-align:center; color:#00bfff; font-size:18px;">Немає створених зон</p>';
@@ -50,7 +48,6 @@
 
             zones.forEach(zone => {
                 const zoneSensors = sensors.filter(s => s.ZoneID === zone.ID);
-
                 const zoneCard = document.createElement('div');
                 zoneCard.className = 'zone-card';
 
@@ -58,16 +55,19 @@
                 if (zoneSensors.length === 0) {
                     sensorsHtml = '<p class="no-sensors">Сенсорів немає</p>';
                 } else {
-                    sensorsHtml = zoneSensors.map(s => `
-                        <div class="sensor-item ${s.Status?.toLowerCase() === 'active' ? 'active' : 'inactive'}">
-                            <div class="sensor-header">
-                                <span class="status-dot"></span>
-                                <strong>${s.SensorName}</strong>
-                                <span class="sensor-type">${s.SensorType}</span>
+                    sensorsHtml = zoneSensors.map(s => {
+                        const isActive = s.Status?.toLowerCase() === 'active';
+                        return `
+                            <div class="sensor-item ${isActive ? 'active' : 'inactive'}">
+                                <div class="sensor-header">
+                                    <span class="status-dot"></span>
+                                    <strong>${s.SensorName}</strong>
+                                    <span class="sensor-type">${s.SensorType}</span>
+                                </div>
+                                <div class="sensor-value">${s.SensorValue || '—'}</div>
                             </div>
-                            <div class="sensor-value">${s.SensorValue || '—'}</div>
-                        </div>
-                    `).join('');
+                        `;
+                    }).join('');
                 }
 
                 zoneCard.innerHTML = `
@@ -79,7 +79,6 @@
                         ${sensorsHtml}
                     </div>
                 `;
-
                 container.appendChild(zoneCard);
             });
         } catch (err) {
@@ -88,22 +87,21 @@
         }
     }
 
-    // Dropdown
     function toggleDropdown() {
         const dropdown = document.getElementById('dropdown');
         dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
     }
-    window.addEventListener('click', function(e) {
+
+    window.addEventListener('click', e => {
         if (!e.target.matches('.username') && !e.target.closest('.username')) {
             document.getElementById('dropdown').style.display = 'none';
         }
     });
 
-    // Завантажуємо при відкритті сторінки
     document.addEventListener('DOMContentLoaded', loadZonesAndSensors);
 </script>
 
-<style>
+<style type="text/css">
     body {
         font-family: 'Segoe UI', sans-serif;
         background: linear-gradient(135deg, #0a0a0a, #0a1a2e);
@@ -113,6 +111,7 @@
         min-height: 100vh;
     }
 
+    /* === Користувач у правому верхньому куті === */
     .user-menu {
         position: absolute;
         top: 20px;
@@ -232,7 +231,7 @@
     }
 
         .sensor-item.inactive {
-            opacity: 0.6;
+            opacity: 0.8;
             border-left-color: #ff5555;
         }
 
@@ -241,20 +240,6 @@
         align-items: center;
         gap: 10px;
         margin-bottom: 6px;
-    }
-
-    .status-dot {
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
-        background: #ff5555;
-        box-shadow: 0 0 10px #ff5555;
-    }
-
-    .sensor-item.active .status-dot {
-        background: #00ff00;
-        box-shadow: 0 0 15px #00ff0088;
-        animation: pulse 2s infinite;
     }
 
     .sensor-type {
@@ -286,20 +271,53 @@
         padding: 40px;
     }
 
-    @keyframes pulse {
-        0%
-
-    {
-        box-shadow: 0 0 15px #00ff0088;
+    /* === ІНДИКАТОРИ === */
+    .status-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: #ff5555;
+        box-shadow: 0 0 10px #ff5555;
     }
 
-    50% {
-        box-shadow: 0 0 25px #00ff00cc;
+    /* Зелений — активний */
+    .sensor-item.active .status-dot {
+        background: #00ff00;
+        animation: pulse-green 2s infinite;
     }
 
-    100% {
-        box-shadow: 0 0 15px #00ff0088;
+    /* Червоний — неактивний (тепер теж пульсує!) */
+    .sensor-item.inactive .status-dot {
+        background: #ff0000;
+        animation: pulse-red 2s infinite;
     }
 
+    /* === АНІМАЦІЇ === */
+    @@keyframes pulse-green {
+        0% {
+            box-shadow: 0 0 10px #00ff0088;
+        }
+
+        50% {
+            box-shadow: 0 0 25px #00ff00cc;
+        }
+
+        100% {
+            box-shadow: 0 0 10px #00ff0088;
+        }
+    }
+
+    @@keyframes pulse-red {
+        0% {
+            box-shadow: 0 0 10px #ff000088;
+        }
+
+        50% {
+            box-shadow: 0 0 25px #ff0000cc;
+        }
+
+        100% {
+            box-shadow: 0 0 10px #ff000088;
+        }
     }
 </style>
