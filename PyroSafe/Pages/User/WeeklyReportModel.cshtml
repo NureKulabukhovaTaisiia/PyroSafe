@@ -32,6 +32,7 @@
         </div>
     </div>
 </div>
+
 <script>
     let currentZone = null;
     let currentSensors = [];
@@ -114,14 +115,14 @@
             Comment: comment || "Без коментарів"
         };
         try {
-            const res = await fetch('?handler=GenerateWeeklyReport', { // ← ЗМІНИЛИ НА ВІДНОСНИЙ ШЛЯХ
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'RequestVerificationToken': document.querySelector('input[name="__RequestVerificationToken"]')?.value || ''
-                },
-                body: JSON.stringify(reportData)
-            });
+              const res = await fetch('?handler=GenerateWeeklyReport', {  // ← Оце головне!
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'RequestVerificationToken': document.querySelector('input[name="__RequestVerificationToken"]')?.value || ''
+        },
+        body: JSON.stringify(reportData)
+    });
             if (!res.ok) {
                 const errorText = await res.text();
                 throw new Error(errorText || 'Помилка сервера');
