@@ -7,11 +7,11 @@ using System.Threading.Tasks;
 // Шлях API: /api/zones
 [Route("api/[controller]")]
 [ApiController]
-public class ZoneController : ControllerBase
+public class ZonesController : ControllerBase
 {
     private readonly AppDbContext _context;
 
-    public ZoneController(AppDbContext context)
+    public ZonesController(AppDbContext context)
     {
         _context = context;
     }
