@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;           // ← ЦЕ ОБОВ’ЯЗКОВО ДЛЯ Json() і BadRequest()
+﻿using Microsoft.AspNetCore.Mvc; // ← ЦЕ ОБОВ’ЯЗКОВО ДЛЯ Json() і BadRequest()
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using System.Net;
@@ -22,7 +22,7 @@ namespace PyroSafe.Pages.User
         {
         }
 
-        [HttpPost]
+        [IgnoreAntiforgeryToken(Order = 1001)] // Залиште для ігнорування токена в JSON POST
         public async Task<IActionResult> OnPostGenerateWeeklyReportAsync([FromBody] ReportRequestDto dto)
         {
             if (dto == null || dto.ZoneId <= 0)
@@ -49,10 +49,10 @@ namespace PyroSafe.Pages.User
                 .OrderByDescending(e => e.CreatedAt)
                 .ToListAsync();
 
-            // Формуємо текст звіту
+            // Формуємо текст звіту (виправив форматування для кращого вигляду, але це опціонально)
             var sb = new StringBuilder();
             sb.AppendLine("".PadRight(80, '='));
-            sb.AppendLine("               ЗВІТ ПО СИСТЕМІ PYROSAFE");
+            sb.AppendLine("               ЗВІТ ПО СИСТЕМІ PYROSAFE"); // Додав відступи для центрування
             sb.AppendLine($"               {weekAgo:dd.MM.yyyy} – {DateTime.Today:dd.MM.yyyy}");
             sb.AppendLine("".PadRight(80, '='));
             sb.AppendLine();
@@ -117,7 +117,7 @@ namespace PyroSafe.Pages.User
             }
             catch (Exception ex)
             {
-                // Навіть якщо email не відправився — файл доступний12312
+                // Навіть якщо email не відправився — файл доступний
                 return new JsonResult(new
                 {
                     success = true,

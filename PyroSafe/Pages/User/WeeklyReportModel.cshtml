@@ -114,7 +114,7 @@
             Comment: comment || "Без коментарів"
         };
         try {
-            const res = await fetch('/User/WeeklyReport?handler=GenerateWeeklyReport', {
+            const res = await fetch('?handler=GenerateWeeklyReport', { // ← ЗМІНИЛИ НА ВІДНОСНИЙ ШЛЯХ
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
