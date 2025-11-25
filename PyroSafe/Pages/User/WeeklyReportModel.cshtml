@@ -1,37 +1,29 @@
-﻿
-@page
+﻿@page
 @model PyroSafe.Pages.User.WeeklyReportModel
 @{
     ViewData["Title"] = "Звіт за тиждень";
 }
-
 <div class="form-wrapper">
     <h1 class="welcome-title">Звіт за останній тиждень</h1>
     <button type="button" class="btn-login" onclick="location.href='/User/Home'">На головну</button>
-
     <div class="form-container">
         <div class="entry-box">
             <label><strong>Оберіть зону:</strong></label>
             <select id="zoneSelect" onchange="loadZoneData()">
                 <option value="">— Оберіть зону —</option>
             </select>
-
             <div id="zoneInfo" style="margin:20px 0; display:none;">
                 <h3>Інформація про зону</h3>
                 <p><strong>Назва:</strong> <span id="zoneName"></span></p>
                 <p><strong>Поверх:</strong> <span id="zoneFloor"></span> • <strong>Площа:</strong> <span id="zoneArea"></span> м²</p>
-
                 <h3>Сенсори в зоні (<span id="sensorsCount">0</span>):</h3>
                 <div id="sensorsList"></div>
-
                 <h3>Івенти за останній тиждень (<span id="eventsCount">0</span>):</h3>
                 <div id="eventsList"></div>
             </div>
-
             <hr />
             <label><strong>Ваш коментар до звіту:</strong></label>
             <textarea id="reportComment" rows="6" placeholder="Напишіть висновки, рекомендації..."></textarea>
-
             <button id="generateReportBtn" class="btn-submit" style="margin-top:20px;">
                 Створити звіт та надіслати на email
             </button>
@@ -39,12 +31,10 @@
         </div>
     </div>
 </div>
-
 <script>
     let currentZone = null;
     let currentSensors = [];
     let currentEvents = [];
-
     async function loadZones() {
         try {
             const res = await fetch('/api/zones');
@@ -60,42 +50,35 @@
             showMessage('reportResult', 'Помилка завантаження зон', 'error');
         }
     }
-
     async function loadZoneData() {
         const zoneId = document.getElementById('zoneSelect').value;
         if (!zoneId) {
             document.getElementById('zoneInfo').style.display = 'none';
             return;
         }
-
         try {
             const [zoneRes, sensorsRes, eventsRes] = await Promise.all([
                 fetch(`/api/zones/${zoneId}`),
                 fetch('/api/sensors'),
                 fetch('/api/events')
             ]);
-
             const zone = await zoneRes.json();
             const allSensors = await sensorsRes.json();
             const allEvents = await eventsRes.json();
-
             currentZone = zone;
             currentSensors = allSensors.filter(s => s.zoneID === zone.id);
-
             const weekAgo = new Date();
             weekAgo.setDate(weekAgo.getDate() - 7);
             currentEvents = allEvents.filter(e =>
                 currentSensors.some(s => s.id === e.sensorID) &&
                 new Date(e.createdAt) >= weekAgo
             );
-
             // Заповнюємо інформацію
             document.getElementById('zoneName').textContent = zone.zoneName;
             document.getElementById('zoneFloor').textContent = zone.floor;
             document.getElementById('zoneArea').textContent = zone.area;
             document.getElementById('sensorsCount').textContent = currentSensors.length;
             document.getElementById('eventsCount').textContent = currentEvents.length;
-
             // Сенсори
             document.getElementById('sensorsList').innerHTML = currentSensors.length === 0
                 ? '<p style="color:#888;">Немає сенсорів</p>'
@@ -104,7 +87,6 @@
                         <strong>${s.sensorName}</strong> (${s.sensorType}) — ${s.sensorValue}
                     </div>
                 `).join('');
-
             // Івенти
             document.getElementById('eventsList').innerHTML = currentEvents.length === 0
                 ? '<p style="color:#888;">Немає івентів за тиждень</p>'
@@ -116,28 +98,22 @@
                         ${e.status === 'Resolved' ? ' <span style="color:#00ff00;">(Вирішено)</span>' : ''}
                     </div>
                 `).join('');
-
             document.getElementById('zoneInfo').style.display = 'block';
-
         } catch (err) {
             showMessage('reportResult', 'Помилка завантаження даних', 'error');
         }
     }
-
-    document.getElementById('generateReportBtn').addEventListener('click', async () => {
+       document.getElementById('generateReportBtn').addEventListener('click', async () => {
         if (!currentZone) {
             return showMessage('reportResult', 'Оберіть зону!', 'warning');
         }
-
         const comment = document.getElementById('reportComment').value.trim();
-
         const reportData = {
             ZoneId: currentZone.id,
             Comment: comment || "Без коментарів"
         };
-
         try {
-            const res = await fetch('/User/GenerateWeeklyReport', {
+            const res = await fetch('/User/WeeklyReport?handler=GenerateWeeklyReport', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -145,11 +121,11 @@
                 },
                 body: JSON.stringify(reportData)
             });
-
+            if (!res.ok) {
+                const errorText = await res.text();
+                throw new Error(errorText || 'Помилка сервера');
+            }
             const result = await res.json();
-
-            if (!res.ok) throw new Error(result.message || 'Помилка');
-
             showMessage('reportResult', 'Звіт створено та надіслано на email!', 'success');
             setTimeout(() => {
                 const link = document.createElement('a');
@@ -157,22 +133,241 @@
                 link.download = result.fileName;
                 link.click();
             }, 1000);
-
         } catch (err) {
             showMessage('reportResult', err.message || 'Не вдалося створити звіт', 'error');
         }
     });
-
     function showMessage(id, text, type) {
         const el = document.getElementById(id);
         el.innerText = text;
         el.style.color = type === 'success' ? '#00ffcc' : type === 'error' ? '#ff5555' : '#ffaa00';
     }
-
     document.addEventListener('DOMContentLoaded', loadZones);
 </script>
+<style type="text/css">
+    body {
+        font-family: 'Segoe UI', sans-serif;
+        background: linear-gradient(135deg, #0a0a0a, #0a1a2e);
+        color: #fff;
+        margin: 0;
+        padding: 20px;
+        min-height: 100vh;
+    }
 
-<style>
+    .user-menu {
+        position: absolute;
+        top: 20px;
+        right: 30px;
+        font-size: 20px;
+        font-weight: 600;
+        color: #00bfff;
+        cursor: pointer;
+        text-shadow: 0 0 8px #00bfff;
+        user-select: none;
+    }
+
+    .dropdown-content {
+        display: none;
+        position: absolute;
+        right: 0;
+        background: #0d0d0d;
+        min-width: 120px;
+        border: 1px solid #00bfff;
+        border-radius: 8px;
+        margin-top: 8px;
+        box-shadow: 0 0 15px rgba(0,191,255,0.4);
+        z-index: 1000;
+    }
+
+    .logout-link {
+        display: block;
+        padding: 12px 16px;
+        color: #00bfff;
+        text-decoration: none;
+        font-weight: 600;
+    }
+
+        .logout-link:hover {
+            background: #00bfff;
+            color: #0a0a0a;
+            border-radius: 6px;
+        }
+
+    .dashboard-title {
+        font-size: 36px;
+        color: #00bfff;
+        text-align: center;
+        margin: 20px 0 40px;
+        text-shadow: 0 0 10px #00bfff;
+    }
+
+    .actions {
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 15px;
+        margin-bottom: 50px;
+    }
+
+    .btn-action {
+        padding: 15px 30px;
+        background: #00bfff;
+        color: #0a0a0a;
+        border: none;
+        border-radius: 8px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+
+        .btn-action:hover {
+            background: #0099cc;
+            transform: translateY(-3px);
+        }
+
+    .zones-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+        gap: 25px;
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+
+    .zone-card {
+        background: #0d0d0d;
+        border-radius: 16px;
+        padding: 20px;
+        box-shadow: 0 0 20px rgba(0,191,255,0.3);
+        border: 1px solid rgba(0,191,255,0.2);
+        transition: all 0.3s;
+    }
+
+        .zone-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 0 30px rgba(0,191,255,0.7);
+            border-color: #00ffff;
+        }
+
+        .zone-card h2 {
+            margin: 0 0 15px 0;
+            color: #00bfff;
+            font-size: 22px;
+        }
+
+            .zone-card h2 small {
+                font-size: 14px;
+                color: #88dddd;
+                font-weight: normal;
+            }
+
+    .sensors-list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .sensor-item {
+        background: rgba(0, 191, 255, 0.08);
+        border-radius: 10px;
+        padding: 12px;
+        border-left: 4px solid #00bfff;
+        transition: all 0.2s;
+    }
+
+        .sensor-item:hover {
+            background: rgba(0, 191, 255, 0.2);
+            transform: translateX(5px);
+            border-left-color: #00ffff;
+        }
+
+        .sensor-item.inactive {
+            opacity: 0.8;
+            border-left-color: #ff5555;
+        }
+
+    .sensor-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 6px;
+    }
+
+    .sensor-type {
+        margin-left: auto;
+        font-size: 12px;
+        color: #88dddd;
+        background: rgba(0,191,255,0.2);
+        padding: 2px 8px;
+        border-radius: 4px;
+    }
+
+    .sensor-value {
+        font-size: 18px;
+        font-weight: bold;
+        color: #00ffcc;
+    }
+
+    .no-sensors {
+        color: #888;
+        font-style: italic;
+        text-align: center;
+        padding: 20px;
+    }
+
+    .loading {
+        text-align: center;
+        font-size: 18px;
+        color: #00bfff;
+        padding: 40px;
+    }
+    /* Пульсуючі точки */
+    .status-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: #ff5555;
+        box-shadow: 0 0 10px #ff5555;
+        transition: all 0.3s;
+    }
+
+    .sensor-item.active .status-dot {
+        background: #00ff00;
+        box-shadow: 0 0 15px #00ff0088;
+        animation: pulse-green 2s infinite ease-in-out;
+    }
+
+    .sensor-item.inactive .status-dot {
+        background: #ff0000;
+        box-shadow: 0 0 15px #ff000088;
+        animation: pulse-red 2s infinite ease-in-out;
+    }
+    @@keyframes pulse-green {
+        0%, 100%
+
+    {
+        box-shadow: 0 0 15px #00ff0088;
+    }
+
+    50% {
+        box-shadow: 0 0 35px #00ff00ee;
+        transform: scale(1.3);
+    }
+
+    }
+    @@keyframes pulse-red {
+        0%, 100%
+
+    {
+        box-shadow: 0 0 15px #ff000088;
+    }
+
+    50% {
+        box-shadow: 0 0 35px #ff0000ee;
+        transform: scale(1.3);
+    }
+
+    }
+
     textarea {
         width: 100%;
         padding: 14px;
