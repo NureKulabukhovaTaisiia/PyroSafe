@@ -100,7 +100,7 @@ namespace PyroSafe.Pages.User
                 var smtp = new SmtpClient("smtp.gmail.com")
                 {
                     Port = 587,
-                    Credentials = new NetworkCredential("pyrosafebot@gmail.com", "pwrq hmfl hvws afsl"),
+                    Credentials = new NetworkCredential("pyrosafebot@gmail.com", "sjzv sgyq cako yxgf"),
                     EnableSsl = true,
                 };
 
