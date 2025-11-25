@@ -1,0 +1,187 @@
+﻿
+@page
+@model PyroSafe.Pages.User.WeeklyReportModel
+@{
+    ViewData["Title"] = "Звіт за тиждень";
+}
+
+<div class="form-wrapper">
+    <h1 class="welcome-title">Звіт за останній тиждень</h1>
+    <button type="button" class="btn-login" onclick="location.href='/User/Home'">На головну</button>
+
+    <div class="form-container">
+        <div class="entry-box">
+            <label><strong>Оберіть зону:</strong></label>
+            <select id="zoneSelect" onchange="loadZoneData()">
+                <option value="">— Оберіть зону —</option>
+            </select>
+
+            <div id="zoneInfo" style="margin:20px 0; display:none;">
+                <h3>Інформація про зону</h3>
+                <p><strong>Назва:</strong> <span id="zoneName"></span></p>
+                <p><strong>Поверх:</strong> <span id="zoneFloor"></span> • <strong>Площа:</strong> <span id="zoneArea"></span> м²</p>
+
+                <h3>Сенсори в зоні (<span id="sensorsCount">0</span>):</h3>
+                <div id="sensorsList"></div>
+
+                <h3>Івенти за останній тиждень (<span id="eventsCount">0</span>):</h3>
+                <div id="eventsList"></div>
+            </div>
+
+            <hr />
+            <label><strong>Ваш коментар до звіту:</strong></label>
+            <textarea id="reportComment" rows="6" placeholder="Напишіть висновки, рекомендації..."></textarea>
+
+            <button id="generateReportBtn" class="btn-submit" style="margin-top:20px;">
+                Створити звіт та надіслати на email
+            </button>
+            <p id="reportResult" style="margin:15px 0; min-height:24px; font-weight:bold;"></p>
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentZone = null;
+    let currentSensors = [];
+    let currentEvents = [];
+
+    async function loadZones() {
+        try {
+            const res = await fetch('/api/zones');
+            const zones = await res.json();
+            const select = document.getElementById('zoneSelect');
+            zones.forEach(z => {
+                const opt = document.createElement('option');
+                opt.value = z.id;
+                opt.textContent = `${z.zoneName} (Поверх ${z.floor})`;
+                select.appendChild(opt);
+            });
+        } catch (err) {
+            showMessage('reportResult', 'Помилка завантаження зон', 'error');
+        }
+    }
+
+    async function loadZoneData() {
+        const zoneId = document.getElementById('zoneSelect').value;
+        if (!zoneId) {
+            document.getElementById('zoneInfo').style.display = 'none';
+            return;
+        }
+
+        try {
+            const [zoneRes, sensorsRes, eventsRes] = await Promise.all([
+                fetch(`/api/zones/${zoneId}`),
+                fetch('/api/sensors'),
+                fetch('/api/events')
+            ]);
+
+            const zone = await zoneRes.json();
+            const allSensors = await sensorsRes.json();
+            const allEvents = await eventsRes.json();
+
+            currentZone = zone;
+            currentSensors = allSensors.filter(s => s.zoneID === zone.id);
+
+            const weekAgo = new Date();
+            weekAgo.setDate(weekAgo.getDate() - 7);
+            currentEvents = allEvents.filter(e =>
+                currentSensors.some(s => s.id === e.sensorID) &&
+                new Date(e.createdAt) >= weekAgo
+            );
+
+            // Заповнюємо інформацію
+            document.getElementById('zoneName').textContent = zone.zoneName;
+            document.getElementById('zoneFloor').textContent = zone.floor;
+            document.getElementById('zoneArea').textContent = zone.area;
+            document.getElementById('sensorsCount').textContent = currentSensors.length;
+            document.getElementById('eventsCount').textContent = currentEvents.length;
+
+            // Сенсори
+            document.getElementById('sensorsList').innerHTML = currentSensors.length === 0
+                ? '<p style="color:#888;">Немає сенсорів</p>'
+                : currentSensors.map(s => `
+                    <div style="background:rgba(0,191,255,0.1); padding:10px; margin:8px 0; border-radius:8px;">
+                        <strong>${s.sensorName}</strong> (${s.sensorType}) — ${s.sensorValue}
+                    </div>
+                `).join('');
+
+            // Івенти
+            document.getElementById('eventsList').innerHTML = currentEvents.length === 0
+                ? '<p style="color:#888;">Немає івентів за тиждень</p>'
+                : currentEvents.map(e => `
+                    <div style="background:rgba(255,100,100,0.1); padding:12px; margin:10px 0; border-left:4px solid #ff5555; border-radius:8px;">
+                        <strong>#${e.id}</strong> — ${e.sensorName} — <strong>${e.severity}</strong><br>
+                        <small>${new Date(e.createdAt).toLocaleString()}</small><br>
+                        ${e.description}
+                        ${e.status === 'Resolved' ? ' <span style="color:#00ff00;">(Вирішено)</span>' : ''}
+                    </div>
+                `).join('');
+
+            document.getElementById('zoneInfo').style.display = 'block';
+
+        } catch (err) {
+            showMessage('reportResult', 'Помилка завантаження даних', 'error');
+        }
+    }
+
+    document.getElementById('generateReportBtn').addEventListener('click', async () => {
+        if (!currentZone) {
+            return showMessage('reportResult', 'Оберіть зону!', 'warning');
+        }
+
+        const comment = document.getElementById('reportComment').value.trim();
+
+        const reportData = {
+            ZoneId: currentZone.id,
+            Comment: comment || "Без коментарів"
+        };
+
+        try {
+            const res = await fetch('/User/GenerateWeeklyReport', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'RequestVerificationToken': document.querySelector('input[name="__RequestVerificationToken"]')?.value || ''
+                },
+                body: JSON.stringify(reportData)
+            });
+
+            const result = await res.json();
+
+            if (!res.ok) throw new Error(result.message || 'Помилка');
+
+            showMessage('reportResult', 'Звіт створено та надіслано на email!', 'success');
+            setTimeout(() => {
+                const link = document.createElement('a');
+                link.href = result.downloadUrl;
+                link.download = result.fileName;
+                link.click();
+            }, 1000);
+
+        } catch (err) {
+            showMessage('reportResult', err.message || 'Не вдалося створити звіт', 'error');
+        }
+    });
+
+    function showMessage(id, text, type) {
+        const el = document.getElementById(id);
+        el.innerText = text;
+        el.style.color = type === 'success' ? '#00ffcc' : type === 'error' ? '#ff5555' : '#ffaa00';
+    }
+
+    document.addEventListener('DOMContentLoaded', loadZones);
+</script>
+
+<style>
+    textarea {
+        width: 100%;
+        padding: 14px;
+        background: #0a0a0a;
+        border: 1px solid #00bfff;
+        border-radius: 8px;
+        color: #fff;
+        font-size: 16px;
+        margin: 10px 0;
+        resize: vertical;
+    }
+</style>
