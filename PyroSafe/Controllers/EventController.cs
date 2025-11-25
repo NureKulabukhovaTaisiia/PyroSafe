@@ -156,7 +156,7 @@ public class EventController : ControllerBase
         {
             id = ev.ID,
             SensorID = ev.SensorID,
-            sensorName = ev.Sensor != null ? $"{e.Sensor.SensorName} ({e.Sensor.SensorType})" : "Невідомий",
+            sensorName = ev.Sensor != null ? $"{ev.Sensor.SensorName} ({ev.Sensor.SensorType})" : "Невідомий",
             ScenarioID = ev.ScenarioID,
             scenarioName = ev.Scenario?.ScenarioType ?? "—",
             Description = ev.Description,

@@ -214,17 +214,20 @@
     });
 
     // === Створення івенту ===
-    document.getElementById('createEventBtn').addEventListener('click', async () => {
+      document.getElementById('createEventBtn').addEventListener('click', async () => {
+        const sensorId = parseInt(document.getElementById('eventSensorSelect').value);
+        const scenarioId = document.getElementById('eventScenarioSelect').value ? parseInt(document.getElementById('eventScenarioSelect').value) : null;
+
         const data = {
-            sensorID: parseInt(document.getElementById('eventSensorSelect').value),
-            scenarioID: document.getElementById('eventScenarioSelect').value ? parseInt(document.getElementById('eventScenarioSelect').value) : null,
-            description: document.getElementById('eventDesc').value.trim(),
-            severity: document.getElementById('eventSeverity').value,
-            status: document.getElementById('eventStatus').value
+            SensorID: sensorId,
+            ScenarioID: scenarioId,
+            Description: document.getElementById('eventDesc').value.trim(),
+            Severity: document.getElementById('eventSeverity').value,
+            Status: document.getElementById('eventStatus').value
         };
 
-        if (!data.sensorID || !data.description) {
-            return showMessage('eventResult', 'Заповніть усі обов’язкові поля!', 'warning');
+        if (!data.SensorID || !data.Description) {
+            return showMessage('eventResult', 'Оберіть сенсор та введіть опис!', 'warning');
         }
 
         try {
@@ -234,15 +237,18 @@
                 body: JSON.stringify(data)
             });
 
-            if (!res.ok) throw new Error('Помилка створення івенту');
+            const json = await res.json();
 
-            showMessage('eventResult', 'Івент зареєстровано!', 'success');
+            if (!res.ok) throw new Error(json.message || 'Помилка');
+
+            showMessage('eventResult', 'Івент успішно створено!', 'success');
             document.getElementById('eventDesc').value = '';
             document.getElementById('eventSensorSelect').value = '';
             document.getElementById('eventScenarioSelect').value = '';
-            loadEvents();
+            loadEvents(); // оновить список
+
         } catch (err) {
-            showMessage('eventResult', err.message || 'Помилка', 'error');
+            showMessage('eventResult', err.message, 'error');
         }
     });
 
