@@ -18,7 +18,7 @@
         <button onclick="alert('Створити звіт')" class="btn-action">Створити звіт</button>
         <button onclick="alert('Екстренне сповіщення')" class="btn-action">Екстренне сповіщення</button>
         <button class="btn-action" onclick="location.href='/User/AddZoneSensor'">Додати сенсор та зону</button>
-        <button onclick="alert('Створити сценарій/івент')" class="btn-action">Створити сценарій/івент</button>
+        <button class="btn-action" onclick="location.href='/User/AddEventAndScenario'">Створити сценарій/івент</button>
     </div>
 
     <div id="zonesContainer" class="zones-grid">
@@ -53,6 +53,15 @@
 
                 const zoneCard = document.createElement('div');
                 zoneCard.className = 'zone-card';
+                zoneCard.style.cursor = 'pointer';
+                zoneCard.title = 'Клік → створити івент для сенсорів цієї зони';
+
+                // Клік по всій зоні — відкриває створення івенту
+                zoneCard.onclick = () => {
+                    const firstSensorId = zoneSensors[0]?.id;
+                    const url = `/User/AddEventAndScenario${firstSensorId ? '?sensorId=' + firstSensorId : ''}`;
+                    location.href = url;
+                };
 
                 let sensorsHtml = '';
                 if (zoneSensors.length === 0) {
@@ -61,7 +70,10 @@
                     sensorsHtml = zoneSensors.map(s => {
                         const isActive = s.status?.toLowerCase() === 'active';
                         return `
-                            <div class="sensor-item ${isActive ? 'active' : 'inactive'}">
+                            <div class="sensor-item ${isActive ? 'active' : 'inactive'}"
+                                 style="cursor:pointer; transition:all 0.2s;"
+                                 onclick="event.stopPropagation(); location.href='/User/AddEventAndScenario?sensorId=${s.id}'"
+                                 title="Клік → створити івент для цього сенсора">
                                 <div class="sensor-header">
                                     <span class="status-dot"></span>
                                     <strong>${s.sensorName || 'Без назви'}</strong>
@@ -105,6 +117,7 @@
 
     document.addEventListener('DOMContentLoaded', loadZonesAndSensors);
 </script>
+
 <style type="text/css">
     body {
         font-family: 'Segoe UI', sans-serif;
@@ -115,7 +128,6 @@
         min-height: 100vh;
     }
 
-    /* === Користувач у правому верхньому куті === */
     .user-menu {
         position: absolute;
         top: 20px;
@@ -201,12 +213,13 @@
         padding: 20px;
         box-shadow: 0 0 20px rgba(0,191,255,0.3);
         border: 1px solid rgba(0,191,255,0.2);
-        transition: transform 0.3s;
+        transition: all 0.3s;
     }
 
         .zone-card:hover {
             transform: translateY(-8px);
-            box-shadow: 0 0 30px rgba(0,191,255,0.6);
+            box-shadow: 0 0 30px rgba(0,191,255,0.7);
+            border-color: #00ffff;
         }
 
         .zone-card h2 {
@@ -232,7 +245,14 @@
         border-radius: 10px;
         padding: 12px;
         border-left: 4px solid #00bfff;
+        transition: all 0.2s;
     }
+
+        .sensor-item:hover {
+            background: rgba(0, 191, 255, 0.2);
+            transform: translateX(5px);
+            border-left-color: #00ffff;
+        }
 
         .sensor-item.inactive {
             opacity: 0.8;
@@ -275,6 +295,7 @@
         padding: 40px;
     }
 
+    /* Пульсуючі точки */
     .status-dot {
         width: 12px;
         height: 12px;
@@ -284,29 +305,26 @@
         transition: all 0.3s;
     }
 
-    /* АКТИВНИЙ — зелений + пульсація */
     .sensor-item.active .status-dot {
         background: #00ff00;
-        box-shadow: 0 0 15px #00ff0088; /* ← ОБОВ’ЯЗКОВО! Базовий стан */
+        box-shadow: 0 0 15px #00ff0088;
         animation: pulse-green 2s infinite ease-in-out;
     }
 
-    /* НЕАКТИВНИЙ — червоний + пульсація */
     .sensor-item.inactive .status-dot {
         background: #ff0000;
         box-shadow: 0 0 15px #ff000088;
         animation: pulse-red 2s infinite ease-in-out;
     }
 
-    /* === АНІМАЦІЇ — з @@ бо це Razor === */
     @@keyframes pulse-green {
         0%, 100% {
             box-shadow: 0 0 15px #00ff0088;
         }
 
         50% {
-            box-shadow: 0 0 30px #00ff00ee;
-            transform: scale(1.15);
+            box-shadow: 0 0 35px #00ff00ee;
+            transform: scale(1.3);
         }
     }
 
@@ -316,8 +334,8 @@
         }
 
         50% {
-            box-shadow: 0 0 30px #ff0000ee;
-            transform: scale(1.15);
+            box-shadow: 0 0 35px #ff0000ee;
+            transform: scale(1.3);
         }
     }
 </style>
