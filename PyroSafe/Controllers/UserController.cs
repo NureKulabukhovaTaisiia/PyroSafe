@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Collections.Generic;
@@ -42,6 +43,22 @@ public class UsersController : ControllerBase
         await _context.SaveChangesAsync();
 
         return Created($"/api/users/{user.ID}", new { user.ID, user.Username });
+    }
+
+    [HttpGet("current-email")]
+    [Authorize]
+    public async Task<IActionResult> GetCurrentUserEmail()
+    {
+        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
+            return Unauthorized();
+
+        var email = await _context.Users
+            .Where(u => u.ID == userId)
+            .Select(u => u.Email)
+            .FirstOrDefaultAsync();
+
+        return Ok(new { email = email ?? "" });
     }
 
     [HttpGet("me")]
@@ -148,18 +165,17 @@ public class UsersController : ControllerBase
         if (user == null)
             return BadRequest("Невірний email або пароль");
 
-        // === 1. Записуємо в сесію (для зручності в Razor Pages) ===
+        // Записуємо в сесію (для старих сторінок)
         HttpContext.Session.SetInt32("UserId", user.ID);
         HttpContext.Session.SetString("Username", user.Username);
         HttpContext.Session.SetString("Email", user.Email);
-        HttpContext.Session.SetString("UserRole", user.UserRole.ToString());
 
-        // === 2. ВХОД ЧЕРЕЗ КУКИ — головне! ===
+        // Куки + Claims
         var claims = new List<Claim>
         {
             new Claim(ClaimTypes.NameIdentifier, user.ID.ToString()),
             new Claim(ClaimTypes.Name, user.Username),
-            new Claim(ClaimTypes.Email, user.Email),
+            new Claim(ClaimTypes.Email, user.Email ?? ""), // важливо!
             new Claim(ClaimTypes.Role, user.UserRole ? "Admin" : "User")
         };
 
@@ -171,7 +187,7 @@ public class UsersController : ControllerBase
             principal,
             new AuthenticationProperties
             {
-                IsPersistent = true,                    // запам'ятовувати між сесіями
+                IsPersistent = true,
                 ExpiresUtc = DateTimeOffset.UtcNow.AddHours(12),
                 AllowRefresh = true
             });
@@ -180,17 +196,9 @@ public class UsersController : ControllerBase
         {
             success = true,
             message = "Успішний вхід",
-            user = new
-            {
-                user.ID,
-                user.Username,
-                user.Email,
-                user.UserRole
-            }
+            user = new { user.ID, user.Username, user.Email, user.UserRole }
         });
     }
-
-
 }
 
 // -------------------- DTO --------------------
