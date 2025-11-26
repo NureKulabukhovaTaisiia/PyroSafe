@@ -20,23 +20,45 @@ namespace PyroSafe.Pages.User
         [IgnoreAntiforgeryToken]
         public async Task<IActionResult> OnPostGenerateWeeklyReportAsync([FromBody] ReportRequestDto dto)
         {
+            var emailLog = new StringBuilder();
+
             try
             {
+                emailLog.AppendLine("🔍 ПОЧАТОК ГЕНЕРАЦІЇ ЗВІТУ");
+
                 if (dto == null || dto.ZoneId <= 0)
-                    return BadRequest(new { success = false, message = "Оберіть зону" });
+                {
+                    emailLog.AppendLine("❌ Невалідний ZoneId");
+                    return BadRequest(new { success = false, message = "Оберіть зону", emailLog = emailLog.ToString() });
+                }
 
                 var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier) ??
                                   User.FindFirst("sub");
                 if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
-                    return BadRequest(new { success = false, message = "Не вдалося визначити користувача" });
+                {
+                    emailLog.AppendLine("❌ Не вдалося отримати userId");
+                    return BadRequest(new { success = false, message = "Не вдалося визначити користувача", emailLog = emailLog.ToString() });
+                }
+
+                emailLog.AppendLine($"✅ UserId: {userId}");
 
                 var user = await _context.Users.FindAsync(userId);
                 if (user == null || string.IsNullOrWhiteSpace(user.Email))
-                    return BadRequest(new { success = false, message = "Користувач не знайдений або немає email" });
+                {
+                    emailLog.AppendLine("❌ Користувач або email не знайдено");
+                    return BadRequest(new { success = false, message = "Користувач не знайдений або немає email", emailLog = emailLog.ToString() });
+                }
+
+                emailLog.AppendLine($"✅ User Email: {user.Email}");
 
                 var zone = await _context.Zones.FindAsync(dto.ZoneId);
                 if (zone == null)
-                    return NotFound(new { success = false, message = "Зона не знайдена" });
+                {
+                    emailLog.AppendLine("❌ Зона не знайдена");
+                    return NotFound(new { success = false, message = "Зона не знайдена", emailLog = emailLog.ToString() });
+                }
+
+                emailLog.AppendLine($"✅ Zone: {zone.ZoneName}");
 
                 var sensors = await _context.Sensors.Where(s => s.ZoneID == dto.ZoneId).ToListAsync();
                 var weekAgo = DateTime.UtcNow.AddDays(-7);
@@ -46,6 +68,8 @@ namespace PyroSafe.Pages.User
                     .Where(e => sensors.Select(s => s.ID).Contains(e.SensorID) && e.CreatedAt >= weekAgo)
                     .OrderByDescending(e => e.CreatedAt)
                     .ToListAsync();
+
+                emailLog.AppendLine($"✅ Sensors: {sensors.Count}, Events: {events.Count}");
 
                 // Формування звіту
                 var sb = new StringBuilder();
@@ -88,44 +112,71 @@ namespace PyroSafe.Pages.User
                 var safeZoneName = Regex.Replace(zone.ZoneName ?? "Unknown", @"[^a-zA-Z0-9_-]", "_");
                 var fileName = $"PyroSafe_Звіт_{safeZoneName}_{DateTime.Now:yyyyMMdd_HHmm}.txt";
 
+                emailLog.AppendLine($"✅ Звіт створено, розмір: {fileBytes.Length} bytes");
+
                 // ВІДПРАВКА EMAIL
-                var emailLog = new StringBuilder();
+                emailLog.AppendLine("📧 СПРОБА ВІДПРАВКИ EMAIL...");
 
                 try
                 {
+                    emailLog.AppendLine("  → Створення SMTP клієнта...");
+
                     using var smtp = new SmtpClient("smtp.gmail.com", 587)
                     {
                         Credentials = new NetworkCredential("pyrosafebot@gmail.com", "nmgg fkwb igcw kqad"),
-                        EnableSsl = true
+                        EnableSsl = true,
+                        Timeout = 10000 // 10 секунд таймаут
                     };
+
+                    emailLog.AppendLine("  → SMTP клієнт створено");
+                    emailLog.AppendLine("  → Створення повідомлення...");
 
                     using var mail = new MailMessage();
                     mail.From = new MailAddress("pyrosafebot@gmail.com", "PyroSafe");
                     mail.To.Add(user.Email);
                     mail.Subject = $"Звіт PyroSafe — {zone.ZoneName}";
-                    mail.Body = "Ваш звіт у вкладенні.";
+                    mail.Body = $"Доброго дня!\n\nВаш тижневий звіт по зоні '{zone.ZoneName}' у вкладенні.\n\n" +
+                                $"Період: {weekAgo:dd.MM.yyyy} - {DateTime.Today:dd.MM.yyyy}\n" +
+                                $"Сенсорів: {sensors.Count}\n" +
+                                $"Івентів: {events.Count}\n\n" +
+                                $"З повагою,\nСистема PyroSafe";
 
-                    // ✅ ИСПРАВЛЕНО: НЕ используем using для MemoryStream
+                    emailLog.AppendLine($"  → Від: pyrosafebot@gmail.com");
+                    emailLog.AppendLine($"  → Кому: {user.Email}");
+                    emailLog.AppendLine($"  → Тема: {mail.Subject}");
+
+                    // Створюємо вкладення БЕЗ using
                     var stream = new MemoryStream(fileBytes);
-                    mail.Attachments.Add(new Attachment(stream, fileName, "text/plain"));
+                    var attachment = new Attachment(stream, fileName, "text/plain; charset=utf-8");
+                    mail.Attachments.Add(attachment);
+
+                    emailLog.AppendLine($"  → Вкладення: {fileName} ({fileBytes.Length} bytes)");
+                    emailLog.AppendLine("  → Відправка...");
 
                     await smtp.SendMailAsync(mail);
 
-                    emailLog.AppendLine("✅ EMAIL SUCCESS - відправлено на " + user.Email);
+                    emailLog.AppendLine("✅ EMAIL УСПІШНО ВІДПРАВЛЕНО!");
 
-                    // Очищаем после отправки
+                    // Очищаємо ресурси
+                    attachment.Dispose();
                     stream.Dispose();
                 }
                 catch (SmtpException smtpEx)
                 {
-                    emailLog.AppendLine("❌ SMTP ERROR: " + smtpEx.Message);
-                    emailLog.AppendLine("StatusCode: " + smtpEx.StatusCode);
+                    emailLog.AppendLine($"❌ SMTP ПОМИЛКА:");
+                    emailLog.AppendLine($"   Message: {smtpEx.Message}");
+                    emailLog.AppendLine($"   StatusCode: {smtpEx.StatusCode}");
+                    emailLog.AppendLine($"   InnerException: {smtpEx.InnerException?.Message ?? "null"}");
                 }
                 catch (Exception ex)
                 {
-                    emailLog.AppendLine("❌ EMAIL ERROR: " + ex.Message);
-                    emailLog.AppendLine("Type: " + ex.GetType().Name);
+                    emailLog.AppendLine($"❌ EMAIL ПОМИЛКА:");
+                    emailLog.AppendLine($"   Type: {ex.GetType().Name}");
+                    emailLog.AppendLine($"   Message: {ex.Message}");
+                    emailLog.AppendLine($"   StackTrace: {ex.StackTrace}");
                 }
+
+                emailLog.AppendLine("🏁 ЗАВЕРШЕННЯ ГЕНЕРАЦІЇ ЗВІТУ");
 
                 // Повертаємо файл користувачу
                 return new JsonResult(new
@@ -140,7 +191,13 @@ namespace PyroSafe.Pages.User
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { success = false, message = "Помилка: " + ex.Message });
+                emailLog.AppendLine($"❌ КРИТИЧНА ПОМИЛКА: {ex.Message}");
+                return StatusCode(500, new
+                {
+                    success = false,
+                    message = "Помилка: " + ex.Message,
+                    emailLog = emailLog.ToString()
+                });
             }
         }
     }
