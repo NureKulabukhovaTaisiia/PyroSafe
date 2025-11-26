@@ -13,11 +13,7 @@ namespace PyroSafe.Pages.User
     public class WeeklyReportModel : PageModel
     {
         private readonly AppDbContext _context;
-
-        public WeeklyReportModel(AppDbContext context)
-        {
-            _context = context;
-        }
+        public WeeklyReportModel(AppDbContext context) => _context = context;
 
         public void OnGet() { }
 
@@ -29,10 +25,8 @@ namespace PyroSafe.Pages.User
                 if (dto == null || dto.ZoneId <= 0)
                     return BadRequest(new { success = false, message = "Оберіть зону" });
 
-                // Отримуємо користувача з Claims (бо є [Authorize])
                 var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier) ??
                                   User.FindFirst("sub");
-
                 if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
                     return BadRequest(new { success = false, message = "Не вдалося визначити користувача" });
 
@@ -45,7 +39,6 @@ namespace PyroSafe.Pages.User
                     return NotFound(new { success = false, message = "Зона не знайдена" });
 
                 var sensors = await _context.Sensors.Where(s => s.ZoneID == dto.ZoneId).ToListAsync();
-
                 var weekAgo = DateTime.UtcNow.AddDays(-7);
                 var events = await _context.Events
                     .Include(e => e.Sensor)
@@ -54,11 +47,11 @@ namespace PyroSafe.Pages.User
                     .OrderByDescending(e => e.CreatedAt)
                     .ToListAsync();
 
-                // === Формуємо текст звіту (тепер ТІЛЬКИ в пам’яті) ===
+                // Формування звіту
                 var sb = new StringBuilder();
                 sb.AppendLine("".PadRight(80, '='));
-                sb.AppendLine("               ЗВІТ ПО СИСТЕМІ PYROSAFE");
-                sb.AppendLine($"               {weekAgo:dd.MM.yyyy} – {DateTime.Today:dd.MM.yyyy}");
+                sb.AppendLine(" ЗВІТ ПО СИСТЕМІ PYROSAFE");
+                sb.AppendLine($" {weekAgo:dd.MM.yyyy} – {DateTime.Today:dd.MM.yyyy}");
                 sb.AppendLine("".PadRight(80, '='));
                 sb.AppendLine();
                 sb.AppendLine($"Зона: {zone.ZoneName} | Поверх: {zone.Floor} | Площа: {zone.Area} м²");
@@ -67,7 +60,6 @@ namespace PyroSafe.Pages.User
                 sb.AppendLine("СЕНСОРИ:");
                 foreach (var s in sensors)
                     sb.AppendLine($" • {s.SensorName} ({s.SensorType}) — {s.SensorValue}");
-
                 sb.AppendLine();
                 sb.AppendLine("ІВЕНТИ:");
                 if (events.Any())
@@ -81,7 +73,7 @@ namespace PyroSafe.Pages.User
                         sb.AppendLine($"   {e.Description}");
                     }
                 }
-                else sb.AppendLine("   — Немає івентів за тиждень —");
+                else sb.AppendLine(" — Немає івентів за тиждень —");
 
                 sb.AppendLine();
                 sb.AppendLine("КОМЕНТАР ОХОРОНЦЯ:");
@@ -93,62 +85,57 @@ namespace PyroSafe.Pages.User
 
                 string reportText = sb.ToString();
                 byte[] fileBytes = Encoding.UTF8.GetBytes(reportText);
-
                 var safeZoneName = Regex.Replace(zone.ZoneName ?? "Unknown", @"[^a-zA-Z0-9_-]", "_");
                 var fileName = $"PyroSafe_Звіт_{safeZoneName}_{DateTime.Now:yyyyMMdd_HHmm}.txt";
 
-                // 1. Спочатку запускаємо відправку email у фоні
+                // ВІДПРАВКА EMAIL + ЛОГИ В КОНСОЛЬ БРАУЗЕРА (F12)
                 _ = Task.Run(async () =>
                 {
                     try
                     {
-                        var attachmentBytes = fileBytes;
+                        // Копіюємо байти, щоб не було ObjectDisposedException
+                        var attachmentBytes = fileBytes.ToArray();
 
-                        using var smtp = new SmtpClient("smtp.gmail.com")
+                        using var smtp = new SmtpClient("smtp.gmail.com", 587)
                         {
-                            Port = 587,
                             Credentials = new NetworkCredential("pyrosafebot@gmail.com", "nmgg fkwb igcw kqad"),
                             EnableSsl = true,
+                            Timeout = 30000
                         };
 
-                        using var mail = new MailMessage
-                        {
-                            From = new MailAddress("pyrosafebot@gmail.com", "PyroSafe System"),
-                            Subject = $"Звіт PyroSafe — {zone.ZoneName} — {DateTime.Today:dd.MM.yyyy}",
-                            Body = $"Вітаю, {user.Username}!\n\nУ вкладенні звіт за останній тиждень по зоні \"{zone.ZoneName}\".\n\nЗ повагою,\nPyroSafe System",
-                            IsBodyHtml = false
-                        };
-
+                        using var mail = new MailMessage();
+                        mail.From = new MailAddress("pyrosafebot@gmail.com", "PyroSafe System");
                         mail.To.Add(user.Email);
+                        mail.Subject = $"Звіт PyroSafe — {zone.ZoneName} — {DateTime.Today:dd.MM.yyyy}";
+                        mail.Body = $"Вітаю, {user.Username}!\n\nУ вкладенні звіт за останній тиждень по зоні \"{zone.ZoneName}\".\n\nЗ повагою,\nPyroSafe System";
 
                         using var stream = new MemoryStream(attachmentBytes);
                         mail.Attachments.Add(new Attachment(stream, fileName, "text/plain"));
 
                         await smtp.SendMailAsync(mail);
+
+                        // УСПІХ — лог у консоль браузера
+                        await HttpContext.Response.WriteAsync(
+                            $"<script>console.log('%cEMAIL УСПІШНО ВІДПРАВЛЕНО%c на {user.Email} | {DateTime.Now:HH:mm:ss}', 'color: #00ff00; font-weight: bold;', '');</script>");
                     }
                     catch (Exception ex)
                     {
-                        // Логування помилки
-                        var logPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "logs");
-                        Directory.CreateDirectory(logPath); // створюємо папку, якщо немає
-                        System.IO.File.AppendAllText(
-                            Path.Combine(logPath, "email-errors.txt"),
-                            $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} | {user?.Email} | {ex.Message}\n{ex.StackTrace}\n\n");
+                        // ПОМИЛКА — лог у консоль браузера
+                        var errorMsg = $"EMAIL ПОМИЛКА: {ex.Message}".Replace("'", "\\'");
+                        await HttpContext.Response.WriteAsync(
+                            $"<script>console.error('%cEMAIL ПОМИЛКА%c {user.Email} | {DateTime.Now:HH:mm:ss}\\n{errorMsg}', 'color: #ff5555; font-weight: bold;', '');</script>");
                     }
                 });
 
-                // 2. Потім одразу повертаємо результат клієнту (email іде фоном)
+                // Повертаємо файл користувачу через base64 (твій старий спосіб — працює)
                 return new JsonResult(new
                 {
                     success = true,
                     message = "Звіт згенеровано!",
                     download = true,
-                    fileName = fileName,
-                    fileContentBase64 = Convert.ToBase64String(fileBytes),
-                    emailSent = false   // ми не чекаємо email, тому завжди false (або можна прибрати)
+                    fileName,
+                    fileContentBase64 = Convert.ToBase64String(fileBytes)
                 });
-
-                // Користувач вже отримав файл, email іде фоном
             }
             catch (Exception ex)
             {
