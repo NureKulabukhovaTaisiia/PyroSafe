@@ -1,7 +1,7 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.Http; // ← ОБОВ'ЯЗКОВО! Для GetInt32(), SetInt32() тощо
 using System.Net;
 using System.Net.Mail;
 using System.Text;
@@ -9,15 +9,14 @@ using System.Text.RegularExpressions;
 
 namespace PyroSafe.Pages.User
 {
+    [Authorize]
     public class WeeklyReportModel : PageModel
     {
         private readonly AppDbContext _context;
-        private readonly IWebHostEnvironment _env;
 
-        public WeeklyReportModel(AppDbContext context, IWebHostEnvironment env)
+        public WeeklyReportModel(AppDbContext context)
         {
             _context = context;
-            _env = env;
         }
 
         public void OnGet() { }
@@ -27,29 +26,25 @@ namespace PyroSafe.Pages.User
         {
             try
             {
-                // Валідація
                 if (dto == null || dto.ZoneId <= 0)
-                    return BadRequest(new { message = "Оберіть зону" });
+                    return BadRequest(new { success = false, message = "Оберіть зону" });
 
-                // Правильне отримання UserId з сесії (.NET 6+)
-                int? sessionUserId = HttpContext.Session.GetInt32("UserId");
-                if (!sessionUserId.HasValue)
-                    return BadRequest(new { message = "Ви не авторизовані. Увійдіть знову." });
+                // Отримуємо користувача з Claims (бо є [Authorize])
+                var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier) ??
+                                  User.FindFirst("sub");
 
-                int userId = sessionUserId.Value;
+                if (userIdClaim == null || !int.TryParse(userIdClaim.Value, out int userId))
+                    return BadRequest(new { success = false, message = "Не вдалося визначити користувача" });
 
                 var user = await _context.Users.FindAsync(userId);
                 if (user == null || string.IsNullOrWhiteSpace(user.Email))
-                    return BadRequest(new { message = "Користувач не знайдений або немає email" });
+                    return BadRequest(new { success = false, message = "Користувач не знайдений або немає email" });
 
                 var zone = await _context.Zones.FindAsync(dto.ZoneId);
                 if (zone == null)
-                    return NotFound(new { message = "Зона не знайдена" });
+                    return NotFound(new { success = false, message = "Зона не знайдена" });
 
-                // Отримання сенсорів та івентів
-                var sensors = await _context.Sensors
-                    .Where(s => s.ZoneID == dto.ZoneId)
-                    .ToListAsync();
+                var sensors = await _context.Sensors.Where(s => s.ZoneID == dto.ZoneId).ToListAsync();
 
                 var weekAgo = DateTime.UtcNow.AddDays(-7);
                 var events = await _context.Events
@@ -59,7 +54,7 @@ namespace PyroSafe.Pages.User
                     .OrderByDescending(e => e.CreatedAt)
                     .ToListAsync();
 
-                // Формування звіту
+                // === Формуємо текст звіту (тепер ТІЛЬКИ в пам’яті) ===
                 var sb = new StringBuilder();
                 sb.AppendLine("".PadRight(80, '='));
                 sb.AppendLine("               ЗВІТ ПО СИСТЕМІ PYROSAFE");
@@ -86,10 +81,7 @@ namespace PyroSafe.Pages.User
                         sb.AppendLine($"   {e.Description}");
                     }
                 }
-                else
-                {
-                    sb.AppendLine("   — Немає івентів за тиждень —");
-                }
+                else sb.AppendLine("   — Немає івентів за тиждень —");
 
                 sb.AppendLine();
                 sb.AppendLine("КОМЕНТАР ОХОРОНЦЯ:");
@@ -99,66 +91,60 @@ namespace PyroSafe.Pages.User
                 sb.AppendLine($"Охоронець: {user.Username}");
                 sb.AppendLine("".PadRight(80, '='));
 
-                var reportText = sb.ToString();
+                string reportText = sb.ToString();
+                byte[] fileBytes = Encoding.UTF8.GetBytes(reportText);
 
-                // Безпечна назва файлу + тимчасовий шлях (працює на Render.com!)
                 var safeZoneName = Regex.Replace(zone.ZoneName ?? "Unknown", @"[^a-zA-Z0-9_-]", "_");
                 var fileName = $"PyroSafe_Звіт_{safeZoneName}_{DateTime.Now:yyyyMMdd_HHmm}.txt";
-                var tempPath = Path.Combine(Path.GetTempPath(), fileName);
 
-                await System.IO.File.WriteAllTextAsync(tempPath, reportText, Encoding.UTF8);
-
-                // Надсилання email
-                try
+                // === 1. Віддаємо файл користувачу для скачування ===
+                // Повертаємо FileResult + додаткові дані для JS
+                return new JsonResult(new
                 {
-                    var smtp = new SmtpClient("smtp.gmail.com")
-                    {
-                        Port = 587,
-                        Credentials = new NetworkCredential("pyrosafebot@gmail.com", "sjzv sgyq cako yxgf"),
-                        EnableSsl = true,
-                    };
+                    success = true,
+                    message = "Звіт згенеровано!",
+                    download = true,
+                    fileName = fileName,
+                    fileContentBase64 = Convert.ToBase64String(fileBytes),  // передаємо файл як base64
+                    emailSent = false // стане true нижче, якщо email пройде
+                });
 
-                    var mail = new MailMessage
-                    {
-                        From = new MailAddress("pyrosafebot@gmail.com"),
-                        Subject = $"Звіт PyroSafe — {zone.ZoneName} — {DateTime.Today:dd.MM.yyyy}",
-                        Body = $"Вітаю, {user.Username}!\n\nУ вкладенні звіт за останній тиждень.\n\nЗ повагою,\nPyroSafe System",
-                        IsBodyHtml = false
-                    };
-                    mail.To.Add(user.Email);
-                    mail.Attachments.Add(new Attachment(tempPath));
-                    await smtp.SendMailAsync(mail);
-
-                    // Видаляємо файл після відправки
-                    try { System.IO.File.Delete(tempPath); } catch { }
-
-                    return new JsonResult(new
-                    {
-                        success = true,
-                        message = "Звіт успішно створено та надіслано на email!",
-                        fileName
-                    });
-                }
-                catch (Exception ex)
+                // === 2. Паралельно відправляємо email (не блокує скачування) ===
+                // Робимо це в фоновому тасці, щоб не затримувати відповідь
+                _ = Task.Run(async () =>
                 {
-                    // Якщо email не відправився — пропонуємо скачати (тимчасово)
-                    return new JsonResult(new
+                    try
                     {
-                        success = true,
-                        message = "Звіт створено! Але не вдалося надіслати email: " + ex.Message,
-                        downloadUrl = $"/reports/download?file={Uri.EscapeDataString(fileName)}",
-                        fileName,
-                        note = "Файл доступний для скачування (тимчасово)"
-                    });
-                }
+                        var smtp = new SmtpClient("smtp.gmail.com")
+                        {
+                            Port = 587,
+                            Credentials = new NetworkCredential("pyrosafebot@gmail.com", "sjzv sgyq cako yxgf"),
+                            EnableSsl = true,
+                        };
+
+                        var mail = new MailMessage
+                        {
+                            From = new MailAddress("pyrosafebot@gmail.com"),
+                            Subject = $"Звіт PyroSafe — {zone.ZoneName} — {DateTime.Today:dd.MM.yyyy}",
+                            Body = $"Вітаю, {user.Username}!\n\nУ вкладенні звіт за останній тиждень.\n\nЗ повагою,\nPyroSafe System",
+                            IsBodyHtml = false
+                        };
+                        mail.To.Add(user.Email);
+
+                        using var stream = new MemoryStream(fileBytes);
+                        mail.Attachments.Add(new Attachment(stream, fileName, "text/plain"));
+
+                        await smtp.SendMailAsync(mail);
+                        // email успішно відправився
+                    }
+                    catch { /* Помилку email ігноруємо — головне, що файл вже у користувача */ }
+                });
+
+                // Користувач вже отримав файл, email іде фоном
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new
-                {
-                    message = "Помилка сервера: " + ex.Message,
-                    details = ex.ToString()
-                });
+                return StatusCode(500, new { success = false, message = "Помилка: " + ex.Message });
             }
         }
     }

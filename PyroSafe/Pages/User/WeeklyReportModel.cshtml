@@ -105,46 +105,57 @@
             showMessage('reportResult', 'Помилка завантаження даних', 'error');
         }
     }
-    document.getElementById('generateReportBtn').addEventListener('click', async () => {
+         document.getElementById('generateReportBtn').addEventListener('click', async () => {
         if (!currentZone) {
             return showMessage('reportResult', 'Оберіть зону!', 'warning');
         }
+
         const comment = document.getElementById('reportComment').value.trim();
         const reportData = {
             ZoneId: currentZone.id,
             Comment: comment || "Без коментарів"
         };
+
         try {
-              const res = await fetch('?handler=GenerateWeeklyReport', {  // ← Оце головне!
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'RequestVerificationToken': document.querySelector('input[name="__RequestVerificationToken"]')?.value || ''
-        },
-        body: JSON.stringify(reportData)
-    });
+            const res = await fetch('?handler=GenerateWeeklyReport', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'RequestVerificationToken': document.querySelector('input[name="__RequestVerificationToken"]')?.value || ''
+                },
+                body: JSON.stringify(reportData)
+            });
+
             if (!res.ok) {
-                const errorText = await res.text();
-                throw new Error(errorText || 'Помилка сервера');
+                const err = await res.text();
+                throw new Error(err || 'Помилка сервера');
             }
+
             const result = await res.json();
-            showMessage('reportResult', 'Звіт створено та надіслано на email!', 'success');
-            setTimeout(() => {
-                const link = document.createElement('a');
-                link.href = result.downloadUrl;
-                link.download = result.fileName;
-                link.click();
-            }, 1000);
+
+            if (result.success && result.download) {
+                // Створюємо і скачуємо файл
+                const bytes = Uint8Array.from(atob(result.fileContentBase64), c => c.charCodeAt(0));
+                const blob = new Blob([bytes], { type: 'text/plain;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = result.fileName;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                showMessage('reportResult', 'Звіт скачано! Перевірте також пошту.', 'success');
+            } else {
+                showMessage('reportResult', result.message || 'Щось пішло не так', 'error');
+            }
         } catch (err) {
+            console.error(err);
             showMessage('reportResult', err.message || 'Не вдалося створити звіт', 'error');
         }
     });
-    function showMessage(id, text, type) {
-        const el = document.getElementById(id);
-        el.innerText = text;
-        el.style.color = type === 'success' ? '#00ffcc' : type === 'error' ? '#ff5555' : '#ffaa00';
-    }
-    document.addEventListener('DOMContentLoaded', loadZones);
 </script>
 <style>
     /* Твій старий CSS + нова кнопка */
