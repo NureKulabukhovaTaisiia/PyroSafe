@@ -4,20 +4,16 @@
 @{
     ViewData["Title"] = "Звіт за тиждень";
 }
-
 <div class="form-wrapper">
     <h1 class="welcome-title">Звіт за останній тиждень</h1>
     <button type="button" class="btn-login" onclick="location.href='/User/Home'">На головну</button>
-
     <div class="form-container">
         @Html.AntiForgeryToken()
-
         <div class="entry-box">
             <label><strong>Оберіть зону:</strong></label>
             <select id="zoneSelect" onchange="loadZoneData()">
                 <option value="">— Оберіть зону —</option>
             </select>
-
             <div id="zoneInfo" style="margin:20px 0; display:none;">
                 <h3>Інформація про зону</h3>
                 <p><strong>Назва:</strong> <span id="zoneName"></span></p>
@@ -27,32 +23,26 @@
                 <h3>Івенти за останній тиждень (<span id="eventsCount">0</span>):</h3>
                 <div id="eventsList"></div>
             </div>
-
             <hr />
             <label><strong>Ваш коментар до звіту:</strong></label>
             <textarea id="reportComment" rows="6" placeholder="Напишіть висновки, рекомендації..."></textarea>
-
             <button id="generateReportBtn" class="btn-submit" style="margin-top:20px;">
                 Створити та завантажити звіт
             </button>
-
             <p id="reportResult" style="margin:15px 0; min-height:28px; font-weight:bold; font-size:17px;"></p>
         </div>
     </div>
 </div>
-
 <script>
     let currentZone = null;
-
     // ПОКАЗ ПОВІДОМЛЕНЬ
     function showMessage(text, type = 'info') {
         const el = document.getElementById('reportResult');
         el.innerHTML = text;
         el.style.color = type === 'success' ? '#00ffcc' :
-                         type === 'error'   ? '#ff5555' :
+                         type === 'error' ? '#ff5555' :
                          type === 'warning' ? '#ffaa00' : '#00ffff';
     }
-
     // ЗАВАНТАЖЕННЯ ЗОН
     async function loadZones() {
         try {
@@ -61,6 +51,11 @@
             const zones = await res.json();
             const select = document.getElementById('zoneSelect');
             select.innerHTML = '<option value="">— Оберіть зону —</option>';
+            // Додаємо опцію "Всі зони"
+            const optAll = document.createElement('option');
+            optAll.value = '0';
+            optAll.textContent = 'Всі зони';
+            select.appendChild(optAll);
             zones.forEach(z => {
                 const opt = document.createElement('option');
                 opt.value = z.id;
@@ -71,74 +66,87 @@
             showMessage('Помилка завантаження зон', 'error');
         }
     }
-
     // ДАНІ ПО ЗОНІ
     async function loadZoneData() {
-        const zoneId = document.getElementById('zoneSelect').value;
-        if (!zoneId) {
+        const zoneIdStr = document.getElementById('zoneSelect').value;
+        if (!zoneIdStr) {
             document.getElementById('zoneInfo').style.display = 'none';
             currentZone = null;
             return;
         }
-
+        const zoneId = parseInt(zoneIdStr);
         try {
-            const [zoneRes, sensorsRes, eventsRes] = await Promise.all([
-                fetch(`/api/zones/${zoneId}`),
-                fetch('/api/sensors'),
-                fetch('/api/events')
-            ]);
-
-            const zone = await zoneRes.json();
-            const allSensors = await sensorsRes.json();
-            const allEvents = await eventsRes.json();
-
-            currentZone = zone;
-
-            const weekAgo = new Date();
-            weekAgo.setDate(weekAgo.getDate() - 7);
-
-            const zoneSensors = allSensors.filter(s => s.zoneID === zone.id);
-            const zoneEvents = allEvents.filter(e =>
-                zoneSensors.some(s => s.id === e.sensorID) &&
-                new Date(e.createdAt) >= weekAgo
-            );
-
-            document.getElementById('zoneName').textContent = zone.zoneName;
-            document.getElementById('zoneFloor').textContent = zone.floor;
-            document.getElementById('zoneArea').textContent = zone.area;
-            document.getElementById('sensorsCount').textContent = zoneSensors.length;
-            document.getElementById('eventsCount').textContent = zoneEvents.length;
-
-            document.getElementById('sensorsList').innerHTML = zoneSensors.length === 0
-                ? '<p style="color:#888;">Немає сенсорів</p>'
-                : zoneSensors.map(s => `<div class="sensor-item">• ${s.sensorName} (${s.sensorType}) — ${s.sensorValue}</div>`).join('');
-
-            document.getElementById('eventsList').innerHTML = zoneEvents.length === 0
-                ? '<p style="color:#888;">Немає івентів за тиждень</p>'
-                : zoneEvents.map(e => `
-                    <div class="event-item">
-                        <strong>#${e.id}</strong> — ${e.sensorName || '—'} — <strong>${e.severity}</strong><br>
-                        <small>${new Date(e.createdAt).toLocaleString('uk-UA')}</small><br>
-                        ${e.description}
-                        ${e.status === 'Resolved' ? ' <span style="color:#00ff00;">(Вирішено)</span>' : ''}
-                    </div>
-                `).join('');
-
-            document.getElementById('zoneInfo').style.display = 'block';
+            if (zoneId === 0) {
+                // Для всіх зон
+                const [zonesRes, sensorsRes, eventsRes] = await Promise.all([
+                    fetch('/api/zones'),
+                    fetch('/api/sensors'),
+                    fetch('/api/events')
+                ]);
+                const zones = await zonesRes.json();
+                const allSensors = await sensorsRes.json();
+                const allEvents = await eventsRes.json();
+                const weekAgo = new Date();
+                weekAgo.setDate(weekAgo.getDate() - 7);
+                const zoneEvents = allEvents.filter(e => new Date(e.createdAt) >= weekAgo);
+                document.getElementById('zoneName').textContent = 'Всі зони';
+                document.getElementById('zoneFloor').textContent = zones.length + ' зон';
+                const totalArea = zones.reduce((sum, z) => sum + (z.area || 0), 0);
+                document.getElementById('zoneArea').textContent = totalArea;
+                document.getElementById('sensorsCount').textContent = allSensors.length;
+                document.getElementById('eventsCount').textContent = zoneEvents.length;
+                document.getElementById('sensorsList').innerHTML = '<p style="color:#888;">Деталі сенсорів по зонах у звіті</p>';
+                document.getElementById('eventsList').innerHTML = '<p style="color:#888;">Деталі івентів по зонах у звіті</p>';
+                currentZone = { id: 0 };
+                document.getElementById('zoneInfo').style.display = 'block';
+            } else {
+                // Для однієї зони
+                const [zoneRes, sensorsRes, eventsRes] = await Promise.all([
+                    fetch(`/api/zones/${zoneId}`),
+                    fetch('/api/sensors'),
+                    fetch('/api/events')
+                ]);
+                const zone = await zoneRes.json();
+                const allSensors = await sensorsRes.json();
+                const allEvents = await eventsRes.json();
+                currentZone = zone;
+                const weekAgo = new Date();
+                weekAgo.setDate(weekAgo.getDate() - 7);
+                const zoneSensors = allSensors.filter(s => s.zoneID === zone.id);
+                const zoneEvents = allEvents.filter(e =>
+                    zoneSensors.some(s => s.id === e.sensorID) &&
+                    new Date(e.createdAt) >= weekAgo
+                );
+                document.getElementById('zoneName').textContent = zone.zoneName;
+                document.getElementById('zoneFloor').textContent = zone.floor;
+                document.getElementById('zoneArea').textContent = zone.area;
+                document.getElementById('sensorsCount').textContent = zoneSensors.length;
+                document.getElementById('eventsCount').textContent = zoneEvents.length;
+                document.getElementById('sensorsList').innerHTML = zoneSensors.length === 0
+                    ? '<p style="color:#888;">Немає сенсорів</p>'
+                    : zoneSensors.map(s => `<div class="sensor-item">• ${s.sensorName} (${s.sensorType}) — ${s.sensorValue}</div>`).join('');
+                document.getElementById('eventsList').innerHTML = zoneEvents.length === 0
+                    ? '<p style="color:#888;">Немає івентів за тиждень</p>'
+                    : zoneEvents.map(e => `
+                        <div class="event-item">
+                            <strong>#${e.id}</strong> — ${e.sensorName || '—'} — <strong>${e.severity}</strong><br>
+                            <small>${new Date(e.createdAt).toLocaleString('uk-UA')}</small><br>
+                            ${e.description}
+                            ${e.status === 'Resolved' ? ' <span style="color:#00ff00;">(Вирішено)</span>' : ''}
+                        </div>
+                    `).join('');
+                document.getElementById('zoneInfo').style.display = 'block';
+            }
         } catch (err) {
             showMessage('Помилка завантаження даних зони', 'error');
         }
     }
-
     // ГЕНЕРАЦІЯ ЗВІТУ
     document.getElementById('generateReportBtn').addEventListener('click', async () => {
         if (!currentZone) return showMessage('Оберіть зону!', 'warning');
-
         const comment = document.getElementById('reportComment').value.trim() || "Без коментарів";
-
         try {
             showMessage('Генеруємо звіт...', 'info');
-
             const res = await fetch('?handler=GenerateWeeklyReport', {
                 method: 'POST',
                 headers: {
@@ -147,14 +155,11 @@
                 },
                 body: JSON.stringify({ ZoneId: currentZone.id, Comment: comment })
             });
-
             if (!res.ok) {
                 const txt = await res.text();
                 throw new Error(txt || 'Помилка сервера');
             }
-
             const result = await res.json();
-
             if (result.success && result.download) {
                 const bytes = Uint8Array.from(atob(result.fileContentBase64), c => c.charCodeAt(0));
                 const blob = new Blob([bytes], { type: 'text/plain;charset=utf-8' });
@@ -166,7 +171,6 @@
                 a.click();
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
-
                 showMessage('✅ Звіт успішно завантажено!', 'success');
             }
         } catch (err) {
@@ -174,13 +178,11 @@
             showMessage('Помилка: ' + (err.message || 'Не вдалося створити звіт'), 'error');
         }
     });
-
     // ЗАПУСК ПРИ ЗАВАНТАЖЕННІ
     document.addEventListener('DOMContentLoaded', () => {
         loadZones();
     });
 </script>
-
 <style>
     /* Твій старий CSS + нова кнопка */
     .btn-resolve {
@@ -385,31 +387,27 @@
             box-shadow: 0 0 15px #ff000088;
             animation: pulse-red 2s infinite ease-in-out
         }
+
     @@keyframes pulse-green {
-        0%, 100%
+        0%, 100% {
+            box-shadow: 0 0 15px #00ff0088
+        }
 
-    {
-        box-shadow: 0 0 15px #00ff0088
+        50% {
+            box-shadow: 0 0 35px #00ff00ee;
+            transform: scale(1.3)
+        }
     }
 
-    50% {
-        box-shadow: 0 0 35px #00ff00ee;
-        transform: scale(1.3)
-    }
-
-    }
     @@keyframes pulse-red {
-        0%, 100%
+        0%, 100% {
+            box-shadow: 0 0 15px #ff000088
+        }
 
-    {
-        box-shadow: 0 0 15px #ff000088
-    }
-
-    50% {
-        box-shadow: 0 0 35px #ff0000ee;
-        transform: scale(1.3)
-    }
-
+        50% {
+            box-shadow: 0 0 35px #ff0000ee;
+            transform: scale(1.3)
+        }
     }
 
     textarea {
