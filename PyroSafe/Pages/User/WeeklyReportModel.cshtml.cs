@@ -90,15 +90,22 @@ namespace PyroSafe.Pages.User
 
                 // ВІДПРАВКА EMAIL + ЛОГИ В КОНСОЛЬ БРАУЗЕРА (F12)
                 // ВІДПРАВКА EMAIL + ЗБІР ЛОГІВ ДЛЯ КОНСОЛІ
+                // ЛОГ EMAIL ДЕБАГУ
                 var emailLog = new StringBuilder();
+                emailLog.AppendLine("=== EMAIL DEBUG LOG START ===");
 
                 try
                 {
+                    emailLog.AppendLine("STEP 1: Creating SmtpClient");
+
                     using var smtp = new SmtpClient("smtp.gmail.com", 587)
                     {
                         Credentials = new NetworkCredential("pyrosafebot@gmail.com", "nmgg fkwb igcw kqad"),
                         EnableSsl = true
                     };
+
+                    emailLog.AppendLine("STEP 2: SmtpClient created");
+                    emailLog.AppendLine("STEP 3: Creating MailMessage");
 
                     using var mail = new MailMessage();
                     mail.From = new MailAddress("pyrosafebot@gmail.com", "PyroSafe");
@@ -106,17 +113,31 @@ namespace PyroSafe.Pages.User
                     mail.Subject = $"Звіт PyroSafe — {zone.ZoneName}";
                     mail.Body = "Ваш звіт у вкладенні.";
 
+                    emailLog.AppendLine("STEP 4: MailMessage created");
+
                     using var stream = new MemoryStream(fileBytes);
                     mail.Attachments.Add(new Attachment(stream, fileName, "text/plain"));
 
+                    emailLog.AppendLine("STEP 5: Attachment added");
+
+                    emailLog.AppendLine("STEP 6: Sending email...");
+
                     await smtp.SendMailAsync(mail);
 
-                    emailLog.AppendLine("EMAIL SUCCESS");
+                    emailLog.AppendLine("STEP 7: EMAIL SUCCESS");
+                }
+                catch (SmtpException ex)
+                {
+                    emailLog.AppendLine("SMTP ERROR: " + ex.Message);
+                    if (ex.InnerException != null)
+                        emailLog.AppendLine("Inner: " + ex.InnerException.Message);
                 }
                 catch (Exception ex)
                 {
-                    emailLog.AppendLine("EMAIL ERROR: " + ex.Message);
+                    emailLog.AppendLine("GENERAL ERROR: " + ex.Message);
                 }
+
+                emailLog.AppendLine("=== EMAIL DEBUG LOG END ===");
 
 
 
