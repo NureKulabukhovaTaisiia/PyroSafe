@@ -91,40 +91,34 @@ namespace PyroSafe.Pages.User
                 // ВІДПРАВКА EMAIL + ЛОГИ В КОНСОЛЬ БРАУЗЕРА (F12)
                 // ВІДПРАВКА EMAIL + ЗБІР ЛОГІВ ДЛЯ КОНСОЛІ
                 var emailLog = new StringBuilder();
-                _ = Task.Run(async () =>
+
+                try
                 {
-                    try
+                    using var smtp = new SmtpClient("smtp.gmail.com", 587)
                     {
-                        var attachmentBytes = fileBytes.ToArray(); // копіюємо байти
+                        Credentials = new NetworkCredential("pyrosafebot@gmail.com", "nmgg fkwb igcw kqad"),
+                        EnableSsl = true
+                    };
 
-                        using var smtp = new SmtpClient("smtp.gmail.com", 587)
-                        {
-                            Credentials = new NetworkCredential("pyrosafebot@gmail.com", "nmgg fkwb igcw kqad"),
-                            EnableSsl = true,
-                            Timeout = 30000
-                        };
+                    using var mail = new MailMessage();
+                    mail.From = new MailAddress("pyrosafebot@gmail.com", "PyroSafe");
+                    mail.To.Add(user.Email);
+                    mail.Subject = $"Звіт PyroSafe — {zone.ZoneName}";
+                    mail.Body = "Ваш звіт у вкладенні.";
 
-                        using var mail = new MailMessage();
-                        mail.From = new MailAddress("pyrosafebot@gmail.com", "PyroSafe System");
-                        mail.To.Add(user.Email);
-                        mail.Subject = $"Звіт PyroSafe — {zone.ZoneName} — {DateTime.Today:dd.MM.yyyy}";
-                        mail.Body = $"Вітаю, {user.Username}!\n\nУ вкладенні звіт за останній тиждень по зоні \"{zone.ZoneName}\".\n\nЗ повагою,\nPyroSafe System";
+                    using var stream = new MemoryStream(fileBytes);
+                    mail.Attachments.Add(new Attachment(stream, fileName, "text/plain"));
 
-                        using var stream = new MemoryStream(attachmentBytes);
-                        mail.Attachments.Add(new Attachment(stream, fileName, "text/plain"));
+                    await smtp.SendMailAsync(mail);
 
-                        await smtp.SendMailAsync(mail);
+                    emailLog.AppendLine("EMAIL SUCCESS");
+                }
+                catch (Exception ex)
+                {
+                    emailLog.AppendLine("EMAIL ERROR: " + ex.Message);
+                }
 
-                        // УСПІХ — додаємо в змінну
-                        emailLog.AppendLine($"EMAIL УСПІШНО ВІДПРАВЛЕНО на {user.Email} | {DateTime.Now:HH:mm:ss}");
-                    }
-                    catch (Exception ex)
-                    {
-                        // ПОМИЛКА — додаємо в змінну
-                        emailLog.AppendLine($"EMAIL ПОМИЛКА: {ex.Message}");
-                        emailLog.AppendLine($"   Деталі: {ex.GetType().Name}");
-                    }
-                });
+
 
                 // Повертаємо файл користувачу через base64 (твій старий спосіб — працює)
                 return new JsonResult(new
