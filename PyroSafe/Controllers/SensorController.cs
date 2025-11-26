@@ -126,6 +126,24 @@ public class SensorsController : ControllerBase  // ← Правильна на�
 
         return NoContent();
     }
+
+
+    [HttpPut("{id}/value")]
+    public async Task<IActionResult> UpdateSensorValue(int id, [FromBody] UpdateValueDto dto)
+    {
+        var sensor = await _context.Sensors.FindAsync(id);
+        if (sensor == null) return NotFound();
+
+        sensor.SensorValue = dto.SensorValue;
+        await _context.SaveChangesAsync();
+        return NoContent();
+    }
+
+}
+
+public class UpdateValueDto
+{
+    public string SensorValue { get; set; }
 }
 
 public class SensorCreateDto
