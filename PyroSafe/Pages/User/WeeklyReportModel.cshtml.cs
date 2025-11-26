@@ -97,47 +97,55 @@ namespace PyroSafe.Pages.User
                 var safeZoneName = Regex.Replace(zone.ZoneName ?? "Unknown", @"[^a-zA-Z0-9_-]", "_");
                 var fileName = $"PyroSafe_Звіт_{safeZoneName}_{DateTime.Now:yyyyMMdd_HHmm}.txt";
 
-                // === 1. Віддаємо файл користувачу для скачування ===
-                // Повертаємо FileResult + додаткові дані для JS
-                return new JsonResult(new
-                {
-                    success = true,
-                    message = "Звіт згенеровано!",
-                    download = true,
-                    fileName = fileName,
-                    fileContentBase64 = Convert.ToBase64String(fileBytes),  // передаємо файл як base64
-                    emailSent = false // стане true нижче, якщо email пройде
-                });
-
-                // === 2. Паралельно відправляємо email (не блокує скачування) ===
-                // Робимо це в фоновому тасці, щоб не затримувати відповідь
+                // 1. Спочатку запускаємо відправку email у фоні
                 _ = Task.Run(async () =>
                 {
                     try
                     {
-                        var smtp = new SmtpClient("smtp.gmail.com")
+                        var attachmentBytes = fileBytes;
+
+                        using var smtp = new SmtpClient("smtp.gmail.com")
                         {
                             Port = 587,
                             Credentials = new NetworkCredential("pyrosafebot@gmail.com", "nmgg fkwb igcw kqad"),
                             EnableSsl = true,
                         };
 
-                        var mail = new MailMessage
+                        using var mail = new MailMessage
                         {
-                            From = new MailAddress("pyrosafebot@gmail.com"),
+                            From = new MailAddress("pyrosafebot@gmail.com", "PyroSafe System"),
                             Subject = $"Звіт PyroSafe — {zone.ZoneName} — {DateTime.Today:dd.MM.yyyy}",
-                            Body = $"Вітаю, {user.Username}!\n\nУ вкладенні звіт за останній тиждень.\n\nЗ повагою,\nPyroSafe System",
+                            Body = $"Вітаю, {user.Username}!\n\nУ вкладенні звіт за останній тиждень по зоні \"{zone.ZoneName}\".\n\nЗ повагою,\nPyroSafe System",
                             IsBodyHtml = false
                         };
+
                         mail.To.Add(user.Email);
 
-                        using var stream = new MemoryStream(fileBytes);
+                        using var stream = new MemoryStream(attachmentBytes);
                         mail.Attachments.Add(new Attachment(stream, fileName, "text/plain"));
 
                         await smtp.SendMailAsync(mail);
-                        // email успішно відправився
                     }
-                    catch { /* Помилку email ігноруємо — головне, що файл вже у користувача */ }
+                    catch (Exception ex)
+                    {
+                        // Логування помилки
+                        var logPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "logs");
+                        Directory.CreateDirectory(logPath); // створюємо папку, якщо немає
+                        System.IO.File.AppendAllText(
+                            Path.Combine(logPath, "email-errors.txt"),
+                            $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} | {user?.Email} | {ex.Message}\n{ex.StackTrace}\n\n");
+                    }
+                });
+
+                // 2. Потім одразу повертаємо результат клієнту (email іде фоном)
+                return new JsonResult(new
+                {
+                    success = true,
+                    message = "Звіт згенеровано!",
+                    download = true,
+                    fileName = fileName,
+                    fileContentBase64 = Convert.ToBase64String(fileBytes),
+                    emailSent = false   // ми не чекаємо email, тому завжди false (або можна прибрати)
                 });
 
                 // Користувач вже отримав файл, email іде фоном
