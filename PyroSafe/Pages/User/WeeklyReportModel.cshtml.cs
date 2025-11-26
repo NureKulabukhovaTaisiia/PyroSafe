@@ -89,12 +89,13 @@ namespace PyroSafe.Pages.User
                 var fileName = $"PyroSafe_Звіт_{safeZoneName}_{DateTime.Now:yyyyMMdd_HHmm}.txt";
 
                 // ВІДПРАВКА EMAIL + ЛОГИ В КОНСОЛЬ БРАУЗЕРА (F12)
+                // ВІДПРАВКА EMAIL + ЗБІР ЛОГІВ ДЛЯ КОНСОЛІ
+                var emailLog = new StringBuilder();
                 _ = Task.Run(async () =>
                 {
                     try
                     {
-                        // Копіюємо байти, щоб не було ObjectDisposedException
-                        var attachmentBytes = fileBytes.ToArray();
+                        var attachmentBytes = fileBytes.ToArray(); // копіюємо байти
 
                         using var smtp = new SmtpClient("smtp.gmail.com", 587)
                         {
@@ -114,16 +115,14 @@ namespace PyroSafe.Pages.User
 
                         await smtp.SendMailAsync(mail);
 
-                        // УСПІХ — лог у консоль браузера
-                        await HttpContext.Response.WriteAsync(
-                            $"<script>console.log('%cEMAIL УСПІШНО ВІДПРАВЛЕНО%c на {user.Email} | {DateTime.Now:HH:mm:ss}', 'color: #00ff00; font-weight: bold;', '');</script>");
+                        // УСПІХ — додаємо в змінну
+                        emailLog.AppendLine($"EMAIL УСПІШНО ВІДПРАВЛЕНО на {user.Email} | {DateTime.Now:HH:mm:ss}");
                     }
                     catch (Exception ex)
                     {
-                        // ПОМИЛКА — лог у консоль браузера
-                        var errorMsg = $"EMAIL ПОМИЛКА: {ex.Message}".Replace("'", "\\'");
-                        await HttpContext.Response.WriteAsync(
-                            $"<script>console.error('%cEMAIL ПОМИЛКА%c {user.Email} | {DateTime.Now:HH:mm:ss}\\n{errorMsg}', 'color: #ff5555; font-weight: bold;', '');</script>");
+                        // ПОМИЛКА — додаємо в змінну
+                        emailLog.AppendLine($"EMAIL ПОМИЛКА: {ex.Message}");
+                        emailLog.AppendLine($"   Деталі: {ex.GetType().Name}");
                     }
                 });
 
@@ -134,7 +133,8 @@ namespace PyroSafe.Pages.User
                     message = "Звіт згенеровано!",
                     download = true,
                     fileName,
-                    fileContentBase64 = Convert.ToBase64String(fileBytes)
+                    fileContentBase64 = Convert.ToBase64String(fileBytes),
+                    emailLog = emailLog.ToString()  // ← Ось і все!
                 });
             }
             catch (Exception ex)
