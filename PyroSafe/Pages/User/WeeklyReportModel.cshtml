@@ -12,12 +12,6 @@
     <div class="form-container">
         @Html.AntiForgeryToken()
 
-        <!-- ПОКАЗ EMAIL КОРИСТУВАЧА -->
-        <div class="email-info-box">
-            <div>Звіт буде надіслано на вашу пошту:</div>
-            <div id="userEmailDisplay" class="user-email">Завантаження...</div>
-        </div>
-
         <div class="entry-box">
             <label><strong>Оберіть зону:</strong></label>
             <select id="zoneSelect" onchange="loadZoneData()">
@@ -39,7 +33,7 @@
             <textarea id="reportComment" rows="6" placeholder="Напишіть висновки, рекомендації..."></textarea>
 
             <button id="generateReportBtn" class="btn-submit" style="margin-top:20px;">
-                Створити звіт та надіслати на email
+                Створити та завантажити звіт
             </button>
 
             <p id="reportResult" style="margin:15px 0; min-height:28px; font-weight:bold; font-size:17px;"></p>
@@ -57,24 +51,6 @@
         el.style.color = type === 'success' ? '#00ffcc' :
                          type === 'error'   ? '#ff5555' :
                          type === 'warning' ? '#ffaa00' : '#00ffff';
-    }
-
-    // ЗАВАНТАЖЕННЯ EMAIL КОРИСТУВАЧА З СЕРВЕРА
-    async function loadUserEmail() {
-        try {
-            const res = await fetch('/api/users/current-email');
-            if (!res.ok) throw new Error();
-            const data = await res.json();
-            const emailEl = document.getElementById('userEmailDisplay');
-            if (data.email) {
-                emailEl.textContent = data.email;
-                emailEl.style.color = '#00ffff';
-            } else {
-                emailEl.innerHTML = '<span style="color:#ff5555;">Email не вказано!</span>';
-            }
-        } catch {
-            document.getElementById('userEmailDisplay').innerHTML = '<span style="color:#ff5555;">Помилка завантаження email</span>';
-        }
     }
 
     // ЗАВАНТАЖЕННЯ ЗОН
@@ -191,7 +167,7 @@
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
 
-                showMessage('Звіт скачано! Також надіслано на пошту.', 'success');
+                showMessage('✅ Звіт успішно завантажено!', 'success');
             }
         } catch (err) {
             console.error(err);
@@ -201,10 +177,10 @@
 
     // ЗАПУСК ПРИ ЗАВАНТАЖЕННІ
     document.addEventListener('DOMContentLoaded', () => {
-        loadUserEmail();
         loadZones();
     });
 </script>
+
 <style>
     /* Твій старий CSS + нова кнопка */
     .btn-resolve {
