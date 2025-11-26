@@ -1,14 +1,22 @@
 ﻿@page
 @model PyroSafe.Pages.User.WeeklyReportModel
+@using Microsoft.AspNetCore.Identity
 @{
     ViewData["Title"] = "Звіт за тиждень";
 }
+
 <div class="form-wrapper">
     <h1 class="welcome-title">Звіт за останній тиждень</h1>
     <button type="button" class="btn-login" onclick="location.href='/User/Home'">На головну</button>
 
     <div class="form-container">
         @Html.AntiForgeryToken()
+
+        <!-- ПОКАЗ EMAIL КОРИСТУВАЧА -->
+        <div class="email-info-box">
+            <div>Звіт буде надіслано на вашу пошту:</div>
+            <div id="userEmailDisplay" class="user-email">Завантаження...</div>
+        </div>
 
         <div class="entry-box">
             <label><strong>Оберіть зону:</strong></label>
@@ -34,7 +42,7 @@
                 Створити звіт та надіслати на email
             </button>
 
-            <p id="reportResult" style="margin:15px 0; min-height:24px; font-weight:bold;"></p>
+            <p id="reportResult" style="margin:15px 0; min-height:28px; font-weight:bold; font-size:17px;"></p>
         </div>
     </div>
 </div>
@@ -42,25 +50,41 @@
 <script>
     let currentZone = null;
 
-    // === ФУНКЦІЯ ПОВІДОМЛЕНЬ (обов’язково має бути ДО кнопки!) ===
+    // ПОКАЗ ПОВІДОМЛЕНЬ
     function showMessage(text, type = 'info') {
         const el = document.getElementById('reportResult');
-        el.innerText = text;
+        el.innerHTML = text;
         el.style.color = type === 'success' ? '#00ffcc' :
                          type === 'error'   ? '#ff5555' :
-                         type === 'warning' ? '#ffaa00' : '#ffffff';
+                         type === 'warning' ? '#ffaa00' : '#00ffff';
     }
 
-    // === Завантаження списку зон ===
+    // ЗАВАНТАЖЕННЯ EMAIL КОРИСТУВАЧА З СЕРВЕРА
+    async function loadUserEmail() {
+        try {
+            const res = await fetch('/api/users/current-email');
+            if (!res.ok) throw new Error();
+            const data = await res.json();
+            const emailEl = document.getElementById('userEmailDisplay');
+            if (data.email) {
+                emailEl.textContent = data.email;
+                emailEl.style.color = '#00ffff';
+            } else {
+                emailEl.innerHTML = '<span style="color:#ff5555;">Email не вказано!</span>';
+            }
+        } catch {
+            document.getElementById('userEmailDisplay').innerHTML = '<span style="color:#ff5555;">Помилка завантаження email</span>';
+        }
+    }
+
+    // ЗАВАНТАЖЕННЯ ЗОН
     async function loadZones() {
         try {
             const res = await fetch('/api/zones');
             if (!res.ok) throw new Error('Не вдалося завантажити зони');
             const zones = await res.json();
-
             const select = document.getElementById('zoneSelect');
-            select.innerHTML = '<option value="">— Оберіть зону —</option>'; // очищаємо
-
+            select.innerHTML = '<option value="">— Оберіть зону —</option>';
             zones.forEach(z => {
                 const opt = document.createElement('option');
                 opt.value = z.id;
@@ -68,11 +92,11 @@
                 select.appendChild(opt);
             });
         } catch (err) {
-            showMessage('Помилка завантаження зон: ' + err.message, 'error');
+            showMessage('Помилка завантаження зон', 'error');
         }
     }
 
-    // === Завантаження даних по зоні ===
+    // ДАНІ ПО ЗОНІ
     async function loadZoneData() {
         const zoneId = document.getElementById('zoneSelect').value;
         if (!zoneId) {
@@ -87,8 +111,6 @@
                 fetch('/api/sensors'),
                 fetch('/api/events')
             ]);
-
-            if (!zoneRes.ok || !sensorsRes.ok || !eventsRes.ok) throw new Error('Помилка завантаження даних');
 
             const zone = await zoneRes.json();
             const allSensors = await sensorsRes.json();
@@ -105,7 +127,6 @@
                 new Date(e.createdAt) >= weekAgo
             );
 
-            // Заповнення інформації
             document.getElementById('zoneName').textContent = zone.zoneName;
             document.getElementById('zoneFloor').textContent = zone.floor;
             document.getElementById('zoneArea').textContent = zone.area;
@@ -114,18 +135,14 @@
 
             document.getElementById('sensorsList').innerHTML = zoneSensors.length === 0
                 ? '<p style="color:#888;">Немає сенсорів</p>'
-                : zoneSensors.map(s => `
-                    <div style="background:rgba(0,191,255,0.1); padding:10px; margin:8px 0; border-radius:8px;">
-                        <strong>${s.sensorName}</strong> (${s.sensorType}) — ${s.sensorValue}
-                    </div>
-                `).join('');
+                : zoneSensors.map(s => `<div class="sensor-item">• ${s.sensorName} (${s.sensorType}) — ${s.sensorValue}</div>`).join('');
 
             document.getElementById('eventsList').innerHTML = zoneEvents.length === 0
                 ? '<p style="color:#888;">Немає івентів за тиждень</p>'
                 : zoneEvents.map(e => `
-                    <div style="background:rgba(255,100,100,0.1); padding:12px; margin:10px 0; border-left:4px solid #ff5555; border-radius:8px;">
+                    <div class="event-item">
                         <strong>#${e.id}</strong> — ${e.sensorName || '—'} — <strong>${e.severity}</strong><br>
-                        <small>${new Date(e.createdAt).toLocaleString()}</small><br>
+                        <small>${new Date(e.createdAt).toLocaleString('uk-UA')}</small><br>
                         ${e.description}
                         ${e.status === 'Resolved' ? ' <span style="color:#00ff00;">(Вирішено)</span>' : ''}
                     </div>
@@ -133,15 +150,13 @@
 
             document.getElementById('zoneInfo').style.display = 'block';
         } catch (err) {
-            showMessage('Помилка завантаження даних зони: ' + err.message, 'error');
+            showMessage('Помилка завантаження даних зони', 'error');
         }
     }
 
-    // === ГЕНЕРАЦІЯ ЗВІТУ ===
+    // ГЕНЕРАЦІЯ ЗВІТУ
     document.getElementById('generateReportBtn').addEventListener('click', async () => {
-        if (!currentZone) {
-            return showMessage('Оберіть зону!', 'warning');
-        }
+        if (!currentZone) return showMessage('Оберіть зону!', 'warning');
 
         const comment = document.getElementById('reportComment').value.trim() || "Без коментарів";
 
@@ -158,18 +173,16 @@
             });
 
             if (!res.ok) {
-                const errText = await res.text();
-                throw new Error(errText || 'Помилка сервера');
+                const txt = await res.text();
+                throw new Error(txt || 'Помилка сервера');
             }
 
             const result = await res.json();
 
             if (result.success && result.download) {
-                // Скачуємо файл
                 const bytes = Uint8Array.from(atob(result.fileContentBase64), c => c.charCodeAt(0));
                 const blob = new Blob([bytes], { type: 'text/plain;charset=utf-8' });
                 const url = URL.createObjectURL(blob);
-
                 const a = document.createElement('a');
                 a.href = url;
                 a.download = result.fileName;
@@ -178,9 +191,7 @@
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
 
-                showMessage('Звіт скачано! Перевірте також пошту.', 'success');
-            } else {
-                showMessage(result.message || 'Щось пішло не так', 'error');
+                showMessage('Звіт скачано! Також надіслано на пошту.', 'success');
             }
         } catch (err) {
             console.error(err);
@@ -188,8 +199,11 @@
         }
     });
 
-    // === Запуск при завантаженні сторінки ===
-    document.addEventListener('DOMContentLoaded', loadZones);
+    // ЗАПУСК ПРИ ЗАВАНТАЖЕННІ
+    document.addEventListener('DOMContentLoaded', () => {
+        loadUserEmail();
+        loadZones();
+    });
 </script>
 <style>
     /* Твій старий CSS + нова кнопка */
