@@ -1,425 +1,158 @@
-﻿@page
-@model PyroSafe.Pages.User.HomeModel
-@{
-    ViewData["Title"] = "Панель охоронця";
-}
-<div class="user-menu">
-    <span class="username" onclick="toggleDropdown()">@Model.Username</span>
-    <div id="dropdown" class="dropdown-content">
-        <a href="/Account/Logout" class="logout-link">Вийти</a>
-    </div>
-</div>
+﻿using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.OpenApi.Models;
+using System.Diagnostics;
 
-<div class="dashboard-wrapper">
-    <h1 class="dashboard-title">Панель охоронця PyroSafe</h1>
+var builder = WebApplication.CreateBuilder(args);
 
-    <!-- Спливаюче повідомлення тривоги -->
-    <div id="alarmToast" class="alarm-toast">
-        <div class="alarm-content">
-            <strong>ТРИВОГА!</strong> Критичне значення на сенсорі!
-        </div>
-    </div>
+// ===== BASE DOMAIN =====
+var baseDomain = builder.Configuration["BASE_DOMAIN"]
+                 ?? "http://localhost:7080";
 
-    <div class="actions">
-        <button class="btn-action" onclick="location.href='/User/WeeklyReportModel'">Створити звіт</button>
-        <button class="btn-action" onclick="location.href='/User/AddZoneSensor'">Додати сенсор та зону</button>
-        <button class="btn-action" onclick="location.href='/User/AddEventAndScenario'">Створити сценарій/івент</button>
-    </div>
+// ===== PostgreSQL =====
+builder.Services.AddDbContext<AppDbContext>
+    (options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("PostgreSqlConnection")));
 
-    <div id="zonesContainer" class="zones-grid">
-        <div class="loading">Завантаження зон та сенсорів...</div>
-    </div>
-</div>
-
-<!-- Звук тривоги (прихований) -->
-<audio id="alarmSound" src="https://assets.mixkit.co/sfx/preview/mixkit-alarm-tone-1055.mp3" preload="auto"></audio>
-
-<script>
-    let lastSensorValues = {}; // для порівняння змін
-
-    async function loadZonesAndSensors() {
-        try {
-            const [zonesRes, sensorsRes] = await Promise.all([
-                fetch('/api/zones'),
-                fetch('/api/sensors')
-            ]);
-
-            if (!zonesRes.ok || !sensorsRes.ok) throw new Error("API error");
-
-            const zones = await zonesRes.json();
-            const sensors = await sensorsRes.json();
-            const container = document.getElementById('zonesContainer');
-            container.innerHTML = '';
-
-            if (zones.length === 0) {
-                container.innerHTML = '<p style="text-align:center; color:#00bfff; font-size:18px;">Немає створених зон</p>';
-                return;
-            }
-
-            zones.forEach(zone => {
-                const zoneSensors = sensors.filter(s => s.zoneID === zone.id);
-                const zoneCard = document.createElement('div');
-                zoneCard.className = 'zone-card';
-                zoneCard.onclick = () => {
-                    const firstId = zoneSensors[0]?.id;
-                    location.href = `/User/AddEventAndScenario${firstId ? '?sensorId=' + firstId : ''}`;
-                };
-
-                let sensorsHtml = '';
-                if (zoneSensors.length === 0) {
-                    sensorsHtml = '<p class="no-sensors">Сенсорів немає</p>';
-                } else {
-                    sensorsHtml = zoneSensors.map(s => {
-                        const value = parseInt(s.sensorValue) || 0;
-                        const isActive = s.status?.toLowerCase() === 'active';
-                        const isAlarm = value > 30;
-
-                        // Зберігаємо старе значення для анімації
-                        const oldValue = lastSensorValues[s.id];
-                        lastSensorValues[s.id] = value;
-
-                        // Анімація зміни
-                        let changeClass = '';
-                        if (oldValue !== undefined) {
-                            if (value > oldValue) changeClass = 'value-up';
-                            if (value < oldValue) changeClass = 'value-down';
-                        }
-
-                        // Тривога — червоний фон + пульсація
-                        const alarmClass = isAlarm ? 'alarm-active' : '';
-
-                        return `
-                            <div class="sensor-item ${isActive ? 'active' : 'inactive'} ${alarmClass}"
-                                 onclick="event.stopPropagation(); location.href='/User/AddEventAndScenario?sensorId=${s.id}'"
-                                 title="Клік → створити івент">
-                                <div class="sensor-header">
-                                    <span class="status-dot"></span>
-                                    <strong>${s.sensorName || 'Без назви'}</strong>
-                                    <span class="sensor-type">${s.sensorType || ''}</span>
-                                </div>
-                                <div class="sensor-value ${changeClass}">${value}</div>
-                                ${isAlarm ? '<div class="alarm-text">ТРИВОГА!</div>' : ''}
-                            </div>
-                        `;
-                    }).join('');
-                }
-
-                zoneCard.innerHTML = `
-                    <h2>${zone.zoneName || 'Зона без назви'} <small>(Поверх ${zone.floor ?? '?'} • ${zone.area ?? '?'} м²)</small></h2>
-                    <div class="sensors-list">${sensorsHtml}</div>
-                `;
-                container.appendChild(zoneCard);
-            });
-
-            // Перевірка на тривогу
-            const hasAlarm = sensors.some(s => (parseInt(s.sensorValue) || 0) > 30);
-            if (hasAlarm) triggerAlarm();
-
-        } catch (err) {
-            document.getElementById('zonesContainer').innerHTML =
-                `<p style="color:#ff5555; text-align:center;">Помилка: ${err.message}</p>`;
-        }
-    }
-
-    function triggerAlarm() {
-        const toast = document.getElementById('alarmToast');
-        const sound = document.getElementById('alarmSound');
-
-        toast.classList.add('show');
-        sound.play().catch(() => {}); // іноді браузер блокує автоплей
-
-        setTimeout(() => toast.classList.remove('show'), 8000);
-    }
-
-    function toggleDropdown() {
-        const dropdown = document.getElementById('dropdown');
-        dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
-    }
-
-    window.addEventListener('click', e => {
-        if (!e.target.matches('.username') && !e.target.closest('.username')) {
-            document.getElementById('dropdown').style.display = 'none';
-        }
+    // ===== CORS =====
+    builder.Services.AddCors(options =>
+    {
+    options.AddPolicy("AllowApp", policy =>
+    {
+    policy.AllowAnyOrigin()
+    .AllowAnyHeader()
+    .AllowAnyMethod();
+    });
     });
 
-    // Оновлення кожні 3 секунди
-    document.addEventListener('DOMContentLoaded', () => {
-        loadZonesAndSensors();
-        setInterval(loadZonesAndSensors, 3000);
+    // ===== Controllers & Razor Pages =====
+    builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+    options.JsonSerializerOptions.PropertyNamingPolicy =
+    System.Text.Json.JsonNamingPolicy.CamelCase;
+    options.JsonSerializerOptions.DefaultIgnoreCondition =
+    System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
+    options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
     });
-</script>
+    builder.Services.AddRazorPages();
 
-<style type="text/css">
-    body {
-        font-family: 'Segoe UI', sans-serif;
-        background: linear-gradient(135deg, #0a0a0a, #0a1a2e);
-        color: #fff;
-        margin: 0;
-        padding: 20px;
-        min-height: 100vh;
-    }
+    // ===== Session =====
+    builder.Services.AddDistributedMemoryCache();
+    builder.Services.AddSession(options =>
+    {
+    options.IdleTimeout = TimeSpan.FromHours(1);
+    options.Cookie.HttpOnly = true;
+    options.Cookie.IsEssential = true;
+    options.Cookie.SameSite = SameSiteMode.Lax;
+    });
 
-    .user-menu {
-        position: absolute;
-        top: 20px;
-        right: 30px;
-        font-size: 20px;
-        font-weight: 600;
-        color: #00bfff;
-        cursor: pointer;
-        text-shadow: 0 0 8px #00bfff;
-        user-select: none;
-    }
+    // ===== Authentication =====
+    builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+    options.LoginPath = "/Account/Login";
+    options.LogoutPath = "/Account/Logout";
+    options.ExpireTimeSpan = TimeSpan.FromHours(12);
+    options.SlidingExpiration = true;
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SameSite = SameSiteMode.Lax;
+    });
 
-    .dropdown-content {
-        display: none;
-        position: absolute;
-        right: 0;
-        background: #0d0d0d;
-        min-width: 120px;
-        border: 1px solid #00bfff;
-        border-radius: 8px;
-        margin-top: 8px;
-        box-shadow: 0 0 15px rgba(0,191,255,0.4);
-        z-index: 1000;
-    }
+    builder.Services.AddAuthorization();
 
-    .logout-link {
-        display: block;
-        padding: 12px 16px;
-        color: #00bfff;
-        text-decoration: none;
-        font-weight: 600;
-    }
+    // ===== HttpContextAccessor =====
+    builder.Services.AddHttpContextAccessor();
 
-        .logout-link:hover {
-            background: #00bfff;
-            color: #0a0a0a;
-            border-radius: 6px;
+    // ===== Swagger =====
+    builder.Services.AddEndpointsApiExplorer();
+    builder.Services.AddSwaggerGen(c =>
+    {
+    c.SwaggerDoc("v1", new OpenApiInfo
+    {
+    Title = "PyroSafe API",
+    Version = "v1"
+    });
+    });
+
+    // ===== Forwarded Headers (Render) =====
+    builder.Services.Configure<ForwardedHeadersOptions>
+        (options =>
+        {
+        options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+        options.KnownNetworks.Clear();
+        options.KnownProxies.Clear();
+        });
+
+        // ========== Build ==========
+        var app = builder.Build();
+
+        app.UseForwardedHeaders();
+
+        app.UseHttpsRedirection();
+        app.UseStaticFiles();
+        app.UseRouting();
+        app.UseCors("AllowApp");
+        app.UseSession();
+
+        // ===== ДОЗВОЛЯЄМО SWAGGER БЕЗ АВТОРИЗАЦІЇ =====
+        app.Use(async (context, next) =>
+        {
+        var path = context.Request.Path.Value?.ToLower();
+
+        if (path != null && (path.StartsWith("/swagger") || path.StartsWith("/swagger/index.html")))
+        {
+        // Пропускаємо swagger без авторизації
+        context.Items["AllowAnonymous"] = true;
+        await next();
+        return;
         }
 
-    .dashboard-title {
-        font-size: 36px;
-        color: #00bfff;
-        text-align: center;
-        margin: 20px 0 40px;
-        text-shadow: 0 0 10px #00bfff;
-    }
+        await next();
+        });
 
-    .actions {
-        display: flex;
-        justify-content: center;
-        flex-wrap: wrap;
-        gap: 15px;
-        margin-bottom: 50px;
-    }
-
-    .btn-action {
-        padding: 15px 30px;
-        background: #00bfff;
-        color: #0a0a0a;
-        border: none;
-        border-radius: 8px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.3s;
-    }
-
-        .btn-action:hover {
-            background: #0099cc;
-            transform: translateY(-3px);
+        // ===== Authentication / Authorization =====
+        app.Use(async (context, next) =>
+        {
+        // Якщо стоїть прапор AllowAnonymous → пропускаємо без перевірки
+        if (context.Items.ContainsKey("AllowAnonymous"))
+        {
+        await next();
+        return;
         }
 
-    .zones-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-        gap: 25px;
-        max-width: 1400px;
-        margin: 0 auto;
-    }
+        await next();
+        });
 
-    .zone-card {
-        background: #0d0d0d;
-        border-radius: 16px;
-        padding: 20px;
-        box-shadow: 0 0 20px rgba(0,191,255,0.3);
-        border: 1px solid rgba(0,191,255,0.2);
-        transition: all 0.3s;
-    }
+        app.UseAuthentication();
+        app.UseAuthorization();
 
-        .zone-card:hover {
-            transform: translateY(-8px);
-            box-shadow: 0 0 30px rgba(0,191,255,0.7);
-            border-color: #00ffff;
+        app.MapControllers();
+        app.MapRazorPages();
+
+        // Swagger тільки в деві
+        if (app.Environment.IsDevelopment())
+        {
+        app.UseSwagger();
+        app.UseSwaggerUI();
         }
 
-        .zone-card h2 {
-            margin: 0 0 15px 0;
-            color: #00bfff;
-            font-size: 22px;
+        // Автовідкриття (локально)
+        if (app.Environment.IsDevelopment())
+        {
+        try
+        {
+        Process.Start(new ProcessStartInfo
+        {
+        FileName = "https://pyrosafe-o880.onrender.com/Account/Register",
+        UseShellExecute = true
+        });
+        }
+        catch { }
         }
 
-            .zone-card h2 small {
-                font-size: 14px;
-                color: #88dddd;
-                font-weight: normal;
-            }
-
-    .sensors-list {
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-    }
-
-    .sensor-item {
-        background: rgba(0, 191, 255, 0.08);
-        border-radius: 10px;
-        padding: 12px;
-        border-left: 4px solid #00bfff;
-        transition: all 0.2s;
-    }
-
-        .sensor-item:hover {
-            background: rgba(0, 191, 255, 0.2);
-            transform: translateX(5px);
-            border-left-color: #00ffff;
-        }
-
-        .sensor-item.inactive {
-            opacity: 0.8;
-            border-left-color: #ff5555;
-        }
-
-    .sensor-header {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin-bottom: 6px;
-    }
-
-    .sensor-type {
-        margin-left: auto;
-        font-size: 12px;
-        color: #88dddd;
-        background: rgba(0,191,255,0.2);
-        padding: 2px 8px;
-        border-radius: 4px;
-    }
-
-    .sensor-value {
-        font-size: 18px;
-        font-weight: bold;
-        color: #00ffcc;
-    }
-
-    .no-sensors {
-        color: #888;
-        font-style: italic;
-        text-align: center;
-        padding: 20px;
-    }
-
-    .loading {
-        text-align: center;
-        font-size: 18px;
-        color: #00bfff;
-        padding: 40px;
-    }
-
-    .alarm-active {
-        background: rgba(255, 0, 0, 0.3) !important;
-        border-left-color: #ff0000 !important;
-        animation: pulse-red-bg 1.5s infinite;
-        box-shadow: 0 0 20px rgba(255,0,0,0.6);
-    }
-
-    .alarm-text {
-        color: #ff0000;
-        font-weight: bold;
-        text-align: center;
-        animation: blink 1s infinite;
-        margin-top: 6px;
-    }
-
-    .sensor-value {
-        font-size: 24px;
-        font-weight: bold;
-        color: #00ffcc;
-        transition: all 0.3s;
-    }
-
-    .value-up {
-        color: #ff5555;
-        transform: scale(1.3);
-    }
-
-    .value-down {
-        color: #00ff00;
-        transform: scale(1.3);
-    }
-
-    .alarm-toast {
-        position: fixed;
-        top: 20px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: #ff0000;
-        color: white;
-        padding: 16px 32px;
-        border-radius: 50px;
-        font-size: 20px;
-        font-weight: bold;
-        box-shadow: 0 0 30px rgba(255,0,0,0.8);
-        z-index: 9999;
-        opacity: 0;
-        transition: opacity 0.5s, transform 0.5s;
-    }
-
-        .alarm-toast.show {
-            opacity: 1;
-            transform: translateX(-50%) translateY(10px);
-        }
-    /* Пульсуючі точки */
-    .status-dot {
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
-        background: #ff5555;
-        box-shadow: 0 0 10px #ff5555;
-        transition: all 0.3s;
-    }
-
-    .sensor-item.active .status-dot {
-        background: #00ff00;
-        box-shadow: 0 0 15px #00ff0088;
-        animation: pulse-green 2s infinite ease-in-out;
-    }
-
-    .sensor-item.inactive .status-dot {
-        background: #ff0000;
-        box-shadow: 0 0 15px #ff000088;
-        animation: pulse-red 2s infinite ease-in-out;
-    }
-
-    @@keyframes pulse-green {
-        0%, 100% {
-            box-shadow: 0 0 15px #00ff0088;
-        }
-
-        50% {
-            box-shadow: 0 0 35px #00ff00ee;
-            transform: scale(1.3);
-        }
-    }
-
-    @@keyframes pulse-red {
-        0%, 100% {
-            box-shadow: 0 0 15px #ff000088;
-        }
-
-        50% {
-            box-shadow: 0 0 35px #ff0000ee;
-            transform: scale(1.3);
-        }
-    }
-</style>
+        app.Run();
