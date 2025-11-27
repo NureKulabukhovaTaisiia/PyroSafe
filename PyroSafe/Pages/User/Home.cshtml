@@ -131,8 +131,12 @@ builder.Services.AddDbContext<AppDbContext>
         app.UseAuthentication();
         app.UseAuthorization();
 
+        app.UseSwagger();
+        app.UseSwaggerUI();
+
         app.MapControllers();
         app.MapRazorPages();
+
 
         // Swagger тільки в деві
         if (app.Environment.IsDevelopment())
