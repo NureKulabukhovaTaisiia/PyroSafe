@@ -32,15 +32,10 @@ builder.Services.AddCors(options =>
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
-        // Головне — camelCase для всіх API-відповідей і вхідних даних
         options.JsonSerializerOptions.PropertyNamingPolicy =
             System.Text.Json.JsonNamingPolicy.CamelCase;
-
-        // Не відправляємо null-поля (чистіше виглядає)
         options.JsonSerializerOptions.DefaultIgnoreCondition =
             System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
-
-        // Додатково: щоб нормально читало camelCase з фронтенду
         options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
     });
 builder.Services.AddRazorPages();
@@ -55,7 +50,7 @@ builder.Services.AddSession(options =>
     options.Cookie.SameSite = SameSiteMode.Lax;
 });
 
-// ===== АВТЕНТИФІКАЦІЯ — ТУТ! ДО Build() =====
+// ===== Authentication =====
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
@@ -67,7 +62,7 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.Cookie.SameSite = SameSiteMode.Lax;
     });
 
-builder.Services.AddAuthorization(); // теж тут!
+builder.Services.AddAuthorization();
 
 // ===== HttpContextAccessor =====
 builder.Services.AddHttpContextAccessor();
@@ -91,7 +86,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.KnownProxies.Clear();
 });
 
-// ========== ВСЕ, ЩО НИЖЧЕ — ПІСЛЯ Build() ==========
+// ========== Build ==========
 var app = builder.Build();
 
 app.UseForwardedHeaders();
@@ -102,10 +97,39 @@ app.UseRouting();
 app.UseCors("AllowApp");
 app.UseSession();
 
-// ← ПРАВИЛЬНИЙ ПОРЯДОК!
-app.UseAuthentication();   // ← Обов’язково після UseSession() і перед UseAuthorization()
-app.UseAuthorization();    // ← Після Authentication!
+// ===== ДОЗВОЛЯЄМО SWAGGER БЕЗ АВТОРИЗАЦІЇ =====
+app.Use(async (context, next) =>
+{
+    var path = context.Request.Path.Value?.ToLower();
 
+    if (path != null && (path.StartsWith("/swagger") || path.StartsWith("/swagger/index.html")))
+    {
+        // Пропускаємо swagger без авторизації
+        context.Items["AllowAnonymous"] = true;
+        await next();
+        return;
+    }
+
+    await next();
+});
+
+// ===== Authentication / Authorization =====
+app.Use(async (context, next) =>
+{
+    // Якщо стоїть прапор AllowAnonymous → пропускаємо без перевірки
+    if (context.Items.ContainsKey("AllowAnonymous"))
+    {
+        await next();
+        return;
+    }
+
+    await next();
+});
+
+app.UseAuthentication();
+app.UseAuthorization();
+app.UseSwagger();
+app.UseSwaggerUI();
 app.MapControllers();
 app.MapRazorPages();
 
